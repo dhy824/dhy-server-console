@@ -1,0 +1,33 @@
+name: Publish verified Android release
+on:
+  push:
+    branches: ['release/v1.2.2']
+    paths: ['dist/**']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download verified artifacts from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for name in dhy-server-console-1.2.2.apk licenses-and-notices.zip SHA256SUMS.txt; do
+            gh api "repos/$GH_REPO/contents/dist/$name?ref=$SOURCE_SHA" -H "Accept: application/vnd.github.raw+json" > "$name"
+          done
+          sha256sum --check SHA256SUMS.txt
+      - name: Publish APK and notices
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '首个公开安装包，版本 1.2.2（12），Android 8.0 及以上。' '' '手机采用紧凑悬浮模糊底栏，大屏平板保留侧边栏；顶部间距适配显示密度。公开版不包含私人服务器地址或密钥，需要自行配置 SSH。订阅管理依赖 README 所述服务端脚本。' '' '代码与界面由 AI 辅助生成。项目自有源码采用 MIT，第三方组件与图片权利说明见随附 licenses-and-notices.zip。' > notes.md
+          gh release create v1.2.2 --target 3b4e1a8226a5918ce9cea909896aa74b3fafad3a --title "dhy 服务器简易控制台 v1.2.2" --notes-file notes.md --draft
+          gh release upload v1.2.2 dhy-server-console-1.2.2.apk licenses-and-notices.zip SHA256SUMS.txt
+          gh release edit v1.2.2 --draft=false --latest
