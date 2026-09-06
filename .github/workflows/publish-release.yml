@@ -2,7 +2,7 @@ name: Publish verified Android release
 on:
   push:
     branches: ['release/v1.2.2']
-    paths: ['dist/**']
+    paths: ['dist/**', '.github/workflows/publish-release.yml']
 permissions:
   contents: write
 jobs:
@@ -18,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           for name in dhy-server-console-1.2.2.apk licenses-and-notices.zip SHA256SUMS.txt; do
-            gh api "repos/$GH_REPO/contents/dist/$name?ref=$SOURCE_SHA" -H "Accept: application/vnd.github.raw+json" > "$name"
+            curl --fail --location --retry 3 "https://raw.githubusercontent.com/$GH_REPO/$SOURCE_SHA/dist/$name" --output "$name"
           done
           sha256sum --check SHA256SUMS.txt
       - name: Publish APK and notices
