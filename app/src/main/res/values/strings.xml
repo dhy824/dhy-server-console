@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">服务器控制台</string>
+    <string name="tunnel_channel_name">安全隧道</string>
+    <string name="tunnel_channel_description">保持反代 API 与 AstrBot 的本机 SSH 隧道</string>
+</resources>
