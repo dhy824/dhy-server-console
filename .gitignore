@@ -8,3 +8,9 @@ app/build/
 build/
 *.apk
 *.aab
+*.jks
+*.p12
+*.keystore
+keystore.properties
+.idea/
+ui-backup-*/
