@@ -51,7 +51,7 @@ fun SubscriptionScreen(model: AppViewModel, bottomInset: Dp = 0.dp) {
     LaunchedEffect(Unit) { action("list", "") }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottomInset).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("订阅与网络", style = MaterialTheme.typography.headlineSmall)
-        Text("DNS 修复会随订阅切换保留；所有启用订阅不可用时自动直连。", style = MaterialTheme.typography.bodyMedium)
+        Text("切到备用后，节点自动测速继续生效；所有启用订阅不可用时自动直连。", style = MaterialTheme.typography.bodyMedium)
         if (busy) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text("服务器正在处理，检测或切换可能需要几分钟…")
@@ -73,7 +73,14 @@ fun SubscriptionScreen(model: AppViewModel, bottomInset: Dp = 0.dp) {
             OutlinedButton(enabled = !busy, onClick = { action("direct", "") }) { Text("直接直连") }
             OutlinedButton(enabled = !busy, onClick = { action("auto", "") }) { Text("恢复自动模式") }
         }
-        Text("可用性为上次检测结果；点击检测可重新测速。修改地址后需点击切换使用。", style = MaterialTheme.typography.bodySmall)
+        Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("主、备用共用自动测速", style = MaterialTheme.typography.titleSmall)
+                Text("服务器每 15 分钟检查通用节点；有新 API 请求时，同轮检查 OpenAI 节点。无需保持应用打开。", style = MaterialTheme.typography.bodySmall)
+                Text("OpenAI 组直测 ChatGPT 官网，仅正常响应参与选点。测速不调用反代或模型。", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Text("可用性为上次通用网络检测结果，不代表模型可用。修改地址后需点击“切换使用”应用。", style = MaterialTheme.typography.bodySmall)
         val entries = status.optJSONArray("items")
         for (index in 0 until (entries?.length() ?: 0)) {
             val entry = entries!!.getJSONObject(index)
@@ -82,13 +89,13 @@ fun SubscriptionScreen(model: AppViewModel, bottomInset: Dp = 0.dp) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(entry.getString("name") + if (entry.optBoolean("active")) " · 使用中" else "", style = MaterialTheme.typography.titleMedium)
                     Text(entry.optString("url"), style = MaterialTheme.typography.bodySmall)
-                    Text((if (entry.optBoolean("enabled")) "参与自动切换" else "自动切换已停用") + " · " + entry.optString("health", "未检测") + " · " + entry.optInt("healthy") + "/" + entry.optInt("total"))
+                    Text((if (entry.optBoolean("enabled")) "参与故障切换" else "故障切换已停用") + " · 通用网络 " + entry.optString("health", "未检测") + " · " + entry.optInt("healthy") + "/" + entry.optInt("total"))
                     if (entry.optBoolean("pending_change")) Text("地址已修改，当前连接仍使用修改前地址。")
                     val stamp = entry.optDouble("checked_at", 0.0)
                     if (stamp > 0) Text("检测时间：" + SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()).format(Date((stamp * 1000).toLong())), style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(enabled = !busy, onClick = { action("switch", id) }) { Text("切换使用") }
-                        OutlinedButton(enabled = !busy, onClick = { action("test", id) }) { Text("检测") }
+                        OutlinedButton(enabled = !busy, onClick = { action("test", id) }) { Text("检测可用性") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = !busy, onClick = { editId = id; name = entry.getString("name"); url = ""; enabled = entry.optBoolean("enabled"); editing = true }) { Text("修改") }

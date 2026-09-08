@@ -164,9 +164,9 @@ fun AmadeusApp(
             onDismissRequest = { confirmSpeed = false },
             icon = { Icon(Icons.Rounded.Speed, contentDescription = null, tint = GoogleBlue) },
             title = { Text("测速并切换节点？") },
-            text = { Text("服务器将测试 OpenAI 策略组中的节点，并切换到当前最快节点。") },
+            text = { Text("对当前订阅的通用组和 OpenAI 组测速，并为各组选取最快的可用节点。\n\nOpenAI 组直测 ChatGPT 官网（chatgpt.com），仅正常响应的节点参与选点。\n\n主、备用订阅共用此流程；测速不调用反代或模型。") },
             confirmButton = {
-                Button(onClick = { confirmSpeed = false; viewModel.runSpeedTest() }) { Text("开始测速") }
+                Button(onClick = { confirmSpeed = false; viewModel.runSpeedTest() }) { Text("测速并切换") }
             },
             dismissButton = { OutlinedButton(onClick = { confirmSpeed = false }) { Text("取消") } }
         )
@@ -428,10 +428,10 @@ private fun DashboardScreen(
                 Icon(Icons.Rounded.Speed, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("OpenAI 节点测速", style = MaterialTheme.typography.titleMedium)
-                    Text("在服务器端测速并切换至当前最快节点", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+                    Text("节点测速与切换", style = MaterialTheme.typography.titleMedium)
+                    Text("OpenAI 组直测 ChatGPT 官网", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
                 }
-                FilledTonalButton(onClick = onSpeed, enabled = !busy) { Text("测速") }
+                FilledTonalButton(onClick = onSpeed, enabled = !busy) { Text("测速切换") }
             }
         }
         if (tunnel.error != null) {

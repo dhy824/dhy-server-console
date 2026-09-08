@@ -176,7 +176,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun runSpeedTest() {
         viewModelScope.launch {
-            runBusy("OpenAI 节点测速与切换已完成。") {
+            runBusy("节点测速流程已完成，请在终端查看各组结果。") {
                 check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
                 val output = withContext(Dispatchers.IO) {
                     SshEngine.runCommand(config.value, keyStore.read(), "/usr/local/sbin/mihomo-auto force")
