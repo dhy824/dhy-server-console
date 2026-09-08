@@ -1,0 +1,2 @@
+590408e4e1b7d02d3261a3b1290b8784c40b70cbb95b933eccaa8bef0c0c4379  dhy-server-console-1.2.3.apk
+13561dff32beebc48d5e13243e72f9cd4e19efb5eec88347b4e56fb28abeae20  licenses-and-notices.zip

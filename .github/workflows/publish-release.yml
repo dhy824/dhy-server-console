@@ -1,0 +1,32 @@
+name: Publish verified Android release
+on:
+  push:
+    branches: ['release/v1.2.3']
+    paths: ['dist/**', '.github/workflows/publish-release.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download and verify release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for name in dhy-server-console-1.2.3.apk licenses-and-notices.zip SHA256SUMS.txt release-notes.md; do
+            curl --fail --location --retry 3 "https://raw.githubusercontent.com/$GH_REPO/$SOURCE_SHA/dist/$name" --output "$name"
+          done
+          sha256sum --check SHA256SUMS.txt
+      - name: Publish APK and notices
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create v1.2.3 --target fbafa7b78b67539af8e3633ad3f9b0f576ce3f46 --title "dhy 服务器简易控制台 v1.2.3" --notes-file release-notes.md --draft
+          gh release upload v1.2.3 dhy-server-console-1.2.3.apk licenses-and-notices.zip SHA256SUMS.txt
+          gh release edit v1.2.3 --draft=false --latest
