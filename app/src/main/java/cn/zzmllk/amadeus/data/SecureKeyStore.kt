@@ -7,6 +7,7 @@ import android.util.AtomicFile
 import java.io.File
 import java.nio.ByteBuffer
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -15,7 +16,12 @@ import javax.crypto.spec.GCMParameterSpec
 class SecureKeyStore(context: Context) {
     private val keyFile = File(context.filesDir, "ssh_identity.enc")
 
-    val hasKey: Boolean get() = keyFile.isFile && keyFile.length() > 20
+    val hasKey: Boolean get() = keyFile.isFile && keyFile.length() in 21L..1_048_768L
+    val revision: String get() {
+        if (!hasKey) return "missing"
+        return MessageDigest.getInstance("SHA-256").digest(keyFile.readBytes())
+            .joinToString("") { "%02x".format(it) }
+    }
 
     fun save(privateKey: ByteArray) {
         var ciphertext: ByteArray? = null

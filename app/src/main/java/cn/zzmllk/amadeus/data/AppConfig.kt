@@ -25,6 +25,9 @@ class ConfigStore(context: Context) {
     private val mutableState = MutableStateFlow(read())
     val state: StateFlow<AppConfig> = mutableState.asStateFlow()
 
+    // Service and UI have separate instances, so read the shared preferences.
+    fun current(): AppConfig = read()
+
     fun update(next: AppConfig) {
         val current = mutableState.value
         val normalized = next.copy(

@@ -24,8 +24,8 @@ android {
         applicationId = "cn.zzmllk.amadeus"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.2.2"
+        versionCode = 14
+        versionName = "1.3.0"
 
         resValue("string", "default_host", embeddedDefaults.getProperty("host", ""))
         resValue("string", "default_ssh_port", embeddedDefaults.getProperty("sshPort", "22"))
@@ -84,6 +84,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     val composeBom = platform("androidx.compose:compose-bom:2025.03.00")
     implementation(composeBom)
 

@@ -13,18 +13,21 @@ import cn.zzmllk.amadeus.R
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.ssh.SshEngine
+import cn.zzmllk.amadeus.ssh.connectionIdentity
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 data class TunnelState(
     val connecting: Boolean = false,
     val apiActive: Boolean = false,
     val astrBotActive: Boolean = false,
     val message: String = "隧道未启动",
-    val error: String? = null
+    val error: String? = null,
+    val requestId: String = ""
 )
 
 object TunnelRuntime {
@@ -34,7 +37,9 @@ object TunnelRuntime {
 }
 
 class TunnelService : Service() {
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor = Executors.newSingleThreadScheduledExecutor()
+    private val sessionLock = Any()
+    @Volatile private var destroyed = false
     private lateinit var configStore: ConfigStore
     private lateinit var keyStore: SecureKeyStore
     private var session: Session? = null
@@ -48,13 +53,16 @@ class TunnelService : Service() {
         keyStore = SecureKeyStore(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, notification("准备安全隧道……"))
+        executor.scheduleWithFixedDelay({ refreshConnectionState() }, 5, 5, TimeUnit.SECONDS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val forceReconnect = intent?.getBooleanExtra(EXTRA_FORCE_RECONNECT, false) == true
+        val requestId = intent?.getStringExtra(EXTRA_REQUEST_ID).orEmpty()
+        if (destroyed) return START_NOT_STICKY
         when (intent?.action) {
-            ACTION_START_API -> executor.execute { startTunnel(Target.API, forceReconnect) }
-            ACTION_START_ASTRBOT -> executor.execute { startTunnel(Target.ASTRBOT, forceReconnect) }
+            ACTION_START_API -> executor.execute { startTunnel(Target.API, forceReconnect, requestId) }
+            ACTION_START_ASTRBOT -> executor.execute { startTunnel(Target.ASTRBOT, forceReconnect, requestId) }
             ACTION_STOP_ALL -> executor.execute { stopAll("隧道已停止") }
         }
         return START_NOT_STICKY
@@ -63,27 +71,34 @@ class TunnelService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        synchronized(sessionLock) {
+            destroyed = true
+            disconnectSession()
+            TunnelRuntime.update(TunnelState())
+        }
         executor.shutdownNow()
-        disconnectSession()
-        TunnelRuntime.update(TunnelState())
         super.onDestroy()
     }
 
-    private fun startTunnel(target: Target, forceReconnect: Boolean = false) {
+    private fun startTunnel(target: Target, forceReconnect: Boolean = false, requestId: String = "") {
+        if (destroyed) return
         val previous = TunnelRuntime.state.value
         val restoreApi = previous.apiActive || apiForwardPort != null || target == Target.API
         val restoreAstrBot = previous.astrBotActive || astrBotForwardPort != null || target == Target.ASTRBOT
-        TunnelRuntime.update(previous.copy(connecting = true, error = null, message = "正在建立 SSH 安全通道……"))
-        updateNotification("正在连接服务器……")
+        publish(previous.copy(connecting = true, error = null, requestId = requestId, message = "正在建立 SSH 安全通道……"))
         try {
-            val config = configStore.state.value
+            val config = configStore.current()
             check(keyStore.hasKey) { "尚未导入 SSH 私钥。" }
             check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
-            val signature = "${config.user}@${config.host}:${config.sshPort}:${config.apiLocalPort}:${config.astrBotLocalPort}"
+            val signature = connectionIdentity(config, keyStore.revision)
             if (forceReconnect || session?.isConnected != true || signature != connectionSignature) {
                 disconnectSession()
-                session = SshEngine.connect(config, keyStore.read())
-                connectionSignature = signature
+                val created = SshEngine.connect(config, keyStore.read())
+                synchronized(sessionLock) {
+                    if (destroyed) { created.disconnect(); return }
+                    session = created
+                    connectionSignature = signature
+                }
             }
             val connected = session ?: error("SSH 会话未建立。")
             if (restoreApi && apiForwardPort == null) {
@@ -95,6 +110,7 @@ class TunnelService : Service() {
                 astrBotForwardPort = config.astrBotLocalPort
             }
             val state = TunnelState(
+                requestId = requestId,
                 connecting = false,
                 apiActive = apiForwardPort != null,
                 astrBotActive = astrBotForwardPort != null,
@@ -104,29 +120,45 @@ class TunnelService : Service() {
                     else -> "AstrBot 通道运行中"
                 }
             )
-            TunnelRuntime.update(state)
-            updateNotification(state.message)
+            publish(state)
         } catch (error: Exception) {
             disconnectSession()
+            if (destroyed) return
             val message = error.message ?: "建立隧道失败。"
-            TunnelRuntime.update(TunnelState(error = message, message = "连接失败"))
-            updateNotification("连接失败：$message")
+            publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
         }
     }
 
     private fun stopAll(message: String) {
         disconnectSession()
-        TunnelRuntime.update(TunnelState(message = message))
+        publish(TunnelState(message = message))
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun disconnectSession() {
+    private fun disconnectSession() = synchronized(sessionLock) {
         try { session?.disconnect() } catch (_: Exception) { }
         session = null
         connectionSignature = ""
         apiForwardPort = null
         astrBotForwardPort = null
+    }
+
+    private fun refreshConnectionState() {
+        if (destroyed || session == null) return
+        try {
+            if (session?.isConnected == true && connectionSignature == connectionIdentity(configStore.current(), keyStore.revision)) return
+        } catch (_: Exception) { }
+        disconnectSession()
+        val message = "SSH 已断开或连接设置已变化，请重新打开通道。"
+        publish(TunnelState(message = message, error = message))
+    }
+
+    private fun publish(state: TunnelState) = synchronized(sessionLock) {
+        if (!destroyed) {
+            TunnelRuntime.update(state)
+            updateNotification(state.message)
+        }
     }
 
     private fun createNotificationChannel() {
@@ -175,6 +207,7 @@ class TunnelService : Service() {
         const val ACTION_START_ASTRBOT = "cn.zzmllk.amadeus.START_ASTRBOT"
         const val ACTION_STOP_ALL = "cn.zzmllk.amadeus.STOP_ALL"
         const val EXTRA_FORCE_RECONNECT = "force_reconnect"
+        const val EXTRA_REQUEST_ID = "request_id"
         private const val CHANNEL_ID = "amadeus_tunnels"
         private const val NOTIFICATION_ID = 8317
     }

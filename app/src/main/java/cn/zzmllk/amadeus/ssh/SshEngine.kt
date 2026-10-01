@@ -1,6 +1,7 @@
 package cn.zzmllk.amadeus.ssh
 
 import android.util.Base64
+import android.os.SystemClock
 import cn.zzmllk.amadeus.data.AppConfig
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.HostKey
@@ -8,7 +9,6 @@ import com.jcraft.jsch.HostKeyRepository
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import com.jcraft.jsch.UserInfo
-import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 
@@ -23,19 +23,23 @@ object SshEngine {
         require(request.length <= 12000) { "订阅请求过长。" }
         val session = connect(config, privateKey)
         val channel = session.openChannel("exec") as ChannelExec
-        val output = ByteArrayOutputStream()
-        val errors = ByteArrayOutputStream()
+        val output = BoundedOutput(262_144)
+        val errors = BoundedOutput(65_536)
         return try {
             channel.setCommand("/usr/local/sbin/mihomo-subscriptions")
             channel.setInputStream(ByteArrayInputStream((request + "\n").toByteArray(Charsets.UTF_8)))
             channel.setOutputStream(output, true)
             channel.setErrStream(errors, true)
             channel.connect(10_000)
-            val deadline = System.currentTimeMillis() + 900_000
-            while (!channel.isClosed && System.currentTimeMillis() < deadline) Thread.sleep(50)
+            val deadline = SystemClock.elapsedRealtime() + 900_000
+            while (!channel.isClosed && SystemClock.elapsedRealtime() < deadline) {
+                check(!output.exceeded && !errors.exceeded) { "服务器响应超过大小上限，请刷新核对结果。" }
+                Thread.sleep(50)
+            }
             check(channel.isClosed) { "等待超时，服务器可能仍在处理；请刷新核对结果。" }
+            check(!output.exceeded && !errors.exceeded) { "服务器响应超过大小上限，请刷新核对结果。" }
             check(channel.exitStatus == 0) { "订阅管理连接失败，请检查服务器组件和 SSH 设置。" }
-            output.toString(Charsets.UTF_8.name())
+            output.text()
         } finally {
             channel.disconnect()
             session.disconnect()
@@ -100,19 +104,23 @@ object SshEngine {
         require(command.length <= 4096) { "命令过长。" }
         val session = connect(config, privateKey)
         val channel = session.openChannel("exec") as ChannelExec
-        val standard = ByteArrayOutputStream()
-        val error = ByteArrayOutputStream()
+        val standard = BoundedOutput(524_288)
+        val error = BoundedOutput(65_536)
         return try {
             channel.setCommand(command)
             channel.setInputStream(null)
             channel.setOutputStream(standard, true)
             channel.setErrStream(error, true)
             channel.connect(10_000)
-            val deadline = System.currentTimeMillis() + 180_000
-            while (!channel.isClosed && System.currentTimeMillis() < deadline) Thread.sleep(40)
+            val deadline = SystemClock.elapsedRealtime() + 180_000
+            while (!channel.isClosed && SystemClock.elapsedRealtime() < deadline) {
+                check(!standard.exceeded && !error.exceeded) { "命令输出超过大小上限，已关闭本机通道。" }
+                Thread.sleep(40)
+            }
             if (!channel.isClosed) throw IllegalStateException("远程命令执行超时。")
-            val stdout = standard.toString(Charsets.UTF_8.name()).trimEnd()
-            val stderr = error.toString(Charsets.UTF_8.name()).trimEnd()
+            check(!standard.exceeded && !error.exceeded) { "命令输出超过大小上限，已关闭本机通道。" }
+            val stdout = standard.text().trimEnd()
+            val stderr = error.text().trimEnd()
             val combined = listOf(stdout, stderr).filter { it.isNotBlank() }.joinToString("\n")
             if (channel.exitStatus != 0) {
                 throw IllegalStateException(

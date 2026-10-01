@@ -14,6 +14,10 @@ import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.ssh.HostProbe
 import cn.zzmllk.amadeus.ssh.SshEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runInterruptible
+import java.util.UUID
+import cn.zzmllk.amadeus.service.TunnelState
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -63,7 +67,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runBusy(null) {
                 check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
-                val reply = withContext(Dispatchers.IO) {
+                val reply = runInterruptible(Dispatchers.IO) {
                     JSONObject(SshEngine.subscriptionRequest(config.value, keyStore.read(), request.toString()))
                 }
                 check(reply.optBoolean("ok")) { reply.optString("error", "订阅操作失败，请刷新状态。") }
@@ -80,12 +84,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableFingerprint = MutableStateFlow<String?>(null)
     val fingerprint: StateFlow<String?> = mutableFingerprint.asStateFlow()
     private var pendingProbe: HostProbe? = null
+    private var pendingProbeConfig: AppConfig? = null
 
     private val mutableOpenConsole = MutableSharedFlow<ConsoleRequest>(extraBufferCapacity = 1)
     val openConsole: SharedFlow<ConsoleRequest> = mutableOpenConsole.asSharedFlow()
 
     fun updateConfig(transform: (AppConfig) -> AppConfig) {
-        configStore.update(transform(config.value))
+        val previous = config.value
+        configStore.update(transform(previous))
+        if (config.value != previous) stopAllTunnels()
     }
 
     fun importPrivateKey(uri: Uri) {
@@ -96,6 +103,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         ?: error("无法读取选择的文件。")
                 }
                 withContext(Dispatchers.IO) { keyStore.save(bytes) }
+                stopAllTunnels()
                 mutableKeyImported.value = true
             }
         }
@@ -112,7 +120,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runBusy(null) {
                 check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
-                val probe = withContext(Dispatchers.IO) { SshEngine.probe(config.value, keyStore.read()) }
+                val checkedConfig = config.value
+                val probe = runInterruptible(Dispatchers.IO) { SshEngine.probe(checkedConfig, keyStore.read()) }
+                check(checkedConfig.host == config.value.host && checkedConfig.sshPort == config.value.sshPort) { "连接设置已变化，请重新测试主机指纹。" }
+                pendingProbeConfig = checkedConfig
                 pendingProbe = probe
                 mutableFingerprint.value = probe.fingerprint
             }
@@ -120,6 +131,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun confirmHostTrust() {
+        val checkedConfig = pendingProbeConfig
+        if (checkedConfig?.host != config.value.host || checkedConfig?.sshPort != config.value.sshPort) {
+            dismissHostTrust(); mutableMessage.value = "连接设置已变化，请重新测试。"; return
+        }
+        stopAllTunnels()
         pendingProbe?.let { configStore.trustHost(it.keyType, it.encodedKey) }
         pendingProbe = null
         mutableFingerprint.value = null
@@ -134,30 +150,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun open(target: ConsoleTarget) {
         viewModelScope.launch {
             runBusy(null) {
-                val current = tunnel.value
-                val alreadyActive = when (target) {
-                    ConsoleTarget.API -> current.apiActive
-                    ConsoleTarget.ASTRBOT -> current.astrBotActive
+                check(keyStore.hasKey) { "请先在设置中导入 SSH 私钥。" }
+                check(config.value.hasTrustedHost) { "请先在设置中测试连接并确认主机指纹。" }
+                val requestId = UUID.randomUUID().toString()
+                val action = when (target) {
+                    ConsoleTarget.API -> TunnelService.ACTION_START_API
+                    ConsoleTarget.ASTRBOT -> TunnelService.ACTION_START_ASTRBOT
                 }
-                if (!alreadyActive) {
-                    check(keyStore.hasKey) { "请先在设置中导入 SSH 私钥。" }
-                    check(config.value.hasTrustedHost) { "请先在设置中测试连接并确认主机指纹。" }
-                    val action = when (target) {
-                        ConsoleTarget.API -> TunnelService.ACTION_START_API
-                        ConsoleTarget.ASTRBOT -> TunnelService.ACTION_START_ASTRBOT
-                    }
-                    ContextCompat.startForegroundService(
-                        getApplication(),
-                        Intent(getApplication(), TunnelService::class.java).setAction(action)
-                    )
-                    withTimeout(25_000) {
-                        TunnelRuntime.state.first { state ->
-                            state.error != null || when (target) {
-                                ConsoleTarget.API -> state.apiActive
-                                ConsoleTarget.ASTRBOT -> state.astrBotActive
-                            }
-                        }.error?.let { error(it) }
-                    }
+                ContextCompat.startForegroundService(
+                    getApplication(),
+                    Intent(getApplication(), TunnelService::class.java).setAction(action)
+                        .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
+                )
+                withTimeout(25_000) {
+                    TunnelRuntime.state.first { state ->
+                        state.requestId == requestId && !state.connecting && (state.error != null || when (target) {
+                            ConsoleTarget.API -> state.apiActive
+                            ConsoleTarget.ASTRBOT -> state.astrBotActive
+                        })
+                    }.error?.let { error(it) }
                 }
                 val request = when (target) {
                     ConsoleTarget.API -> ConsoleRequest(
@@ -176,9 +187,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun runSpeedTest() {
         viewModelScope.launch {
-            runBusy("OpenAI 节点测速与切换已完成。") {
+            runBusy("节点测速流程已完成，请在终端查看各组结果。") {
                 check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
-                val output = withContext(Dispatchers.IO) {
+                val output = runInterruptible(Dispatchers.IO) {
                     SshEngine.runCommand(config.value, keyStore.read(), "/usr/local/sbin/mihomo-auto force")
                 }
                 appendTerminal("节点测速", output)
@@ -190,7 +201,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runBusy(null) {
                 check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
-                val output = withContext(Dispatchers.IO) {
+                val output = runInterruptible(Dispatchers.IO) {
                     SshEngine.runCommand(config.value, keyStore.read(), command)
                 }
                 appendTerminal(command, output)
@@ -200,7 +211,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopAllTunnels() {
         val intent = Intent(getApplication(), TunnelService::class.java).setAction(TunnelService.ACTION_STOP_ALL)
-        getApplication<Application>().startService(intent)
+        getApplication<Application>().stopService(intent)
+        TunnelRuntime.update(TunnelState(message = "隧道已停止"))
     }
 
     fun consumeMessage() {
@@ -213,6 +225,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         try {
             block()
             if (success != null) mutableMessage.value = success
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             mutableMessage.value = error.message ?: "操作失败。"
         } finally {
