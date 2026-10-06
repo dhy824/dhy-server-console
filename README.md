@@ -4,7 +4,7 @@
 
 ## 唯一源码与目录
 
-本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.3.0 已在 GitHub 发布；1.4.0 当前为本地发布候选，待本次发布确认后通过 GitHub Actions 发布源码与 APK。真机安装及交互仍待验收。
+本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.4.0 已于 2026-10-06 通过 GitHub Actions 发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.0)。旧 v1.3.0 保留。真机安装及交互仍待验收。
 
 | 入口 | 职责 |
 | --- | --- |
@@ -77,13 +77,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 
 ### GitHub 发行
 
-当前候选版本 1.4.0 / versionCode 15。确认本次公开发布后，将白名单源码与 `release-public/v1.4.0` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.0` 触发 `.github/workflows/publish-release-v1.4.0.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.0。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份保留，旧 v1.3.0 标签与发行包保留。推送前仍按工作区要求确认本次具体公开内容。
+当前公开版本 1.4.0 / versionCode 15。确认本次公开发布后，将白名单源码与 `release-public/v1.4.0` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.0` 触发 `.github/workflows/publish-release-v1.4.0.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.0。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份保留，旧 v1.3.0 标签与发行包保留。推送前仍按工作区要求确认本次具体公开内容。
 
 本地构建与导出不代表已发布。发布后需检查 Actions、标签指向和下载 APK 的 SHA-256。撤下新 Release 不能把已安装设备降级；设备恢复旧功能建议用原签名构建更高 versionCode 的回退包，避免卸载清数据。
 
 ## 验证范围与回滚
 
-1.4.0 候选已完成 Public Release 构建、Lint、9 项 JVM 契约测试、APK 空 host 与旧签名连续性检查。测试覆盖数字版本、预览标识、计划项目/时效/连接绑定、未知或不匹配回执不得解锁新升级。GitHub 发布待确认。尚无真机安装、系统杀后台、网络切换、服务器连接交互的实测，不将单测当作这些场景的证明。
+1.4.0 已完成 Public Release 构建、Lint、9 项 JVM 契约测试、APK 空 host 与旧签名连续性检查。测试覆盖数字版本、预览标识、计划项目/时效/连接绑定、未知或不匹配回执不得解锁新升级。GitHub Actions 37488403331 成功，公开附件 SHA-256 与本地正式包一致。尚无真机安装、系统杀后台、网络切换、服务器连接交互的实测，不将单测当作这些场景的证明。
 
 2026-09-30 构建事务补验：8 项合成状态回归通过，覆盖成功/失败恢复、空文件、中文路径盘符、外来映射、嵌套锁、跨进程并发与目录清理边界。中文工作区内 Public Debug 实际构建通过，构建前后两个配置文件及三个环境变量一致；已有 1.3.0 正式发行目录保留。
 
