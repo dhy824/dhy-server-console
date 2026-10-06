@@ -6,6 +6,8 @@ local.properties
 default-config.properties
 app/build/
 *.apk
+# Only this reviewed Public release package is eligible for GitHub distribution.
+!/dist/dhy-server-console-1.4.0.apk
 *.aab
 ui-backup-*/
 build/

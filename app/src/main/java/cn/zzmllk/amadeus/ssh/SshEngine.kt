@@ -19,6 +19,34 @@ data class HostProbe(
 )
 
 object SshEngine {
+    fun projectUpdateRequest(config: AppConfig, privateKey: ByteArray, request: String): String {
+        require(request.toByteArray(Charsets.UTF_8).size <= 65535) { "更新请求过长。" }
+        val session = connect(config, privateKey)
+        var channel: ChannelExec? = null
+        return try {
+            val exec = session.openChannel("exec") as ChannelExec
+            channel = exec
+            val output = BoundedOutput(262_144)
+            val errors = BoundedOutput(65_536)
+            exec.setCommand("/usr/bin/python3 -B /usr/local/lib/server-toolbox/project_updates.py")
+            exec.setInputStream(ByteArrayInputStream((request + "\n").toByteArray(Charsets.UTF_8)))
+            exec.setOutputStream(output, true)
+            exec.setErrStream(errors, true)
+            exec.connect(10_000)
+            val deadline = SystemClock.elapsedRealtime() + 180_000
+            while (!exec.isClosed && SystemClock.elapsedRealtime() < deadline) {
+                check(!output.exceeded && !errors.exceeded) { "更新响应超限；已提交任务请用原编号查询。" }
+                Thread.sleep(50)
+            }
+            check(exec.isClosed && !output.exceeded && !errors.exceeded) { "更新响应超时或超限；已提交任务请用原编号查询。" }
+            check(exec.exitStatus == 0) { "更新组件不可用，请检查管理员 SSH 及服务器更新组件。" }
+            output.text()
+        } finally {
+            channel?.disconnect()
+            session.disconnect()
+        }
+    }
+
     fun subscriptionRequest(config: AppConfig, privateKey: ByteArray, request: String): String {
         require(request.length <= 12000) { "订阅请求过长。" }
         val session = connect(config, privateKey)

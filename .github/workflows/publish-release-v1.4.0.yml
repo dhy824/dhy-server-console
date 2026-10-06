@@ -1,0 +1,46 @@
+name: Publish Android 1.4.0 release
+
+on:
+  push:
+    branches: ['codex/android-updates-v1.4.0']
+    paths:
+      - 'dist/**'
+      - '.github/workflows/publish-release-v1.4.0.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-v1.4.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          test -s dist/dhy-server-console-1.4.0.apk
+          test -s dist/verification.json
+          test -s dist/release-notes.md
+      - name: Publish verified package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v1.4.0 --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite. Inspect the existing release before retrying.'
+            exit 1
+          fi
+          gh release create v1.4.0 --repo "$GH_REPO" --target "$GH_SHA" --title 'dhy 服务器简易控制台 v1.4.0' --notes-file dist/release-notes.md --draft
+          gh release upload v1.4.0 --repo "$GH_REPO" dist/dhy-server-console-1.4.0.apk dist/licenses-and-notices.zip dist/SHA256SUMS.txt dist/verification.json
+          gh release edit v1.4.0 --repo "$GH_REPO" --draft=false --latest

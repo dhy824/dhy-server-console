@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -103,6 +104,7 @@ private enum class AppTab(val title: String, val icon: ImageVector) {
     HOME("总览", Icons.Rounded.Dashboard),
     TERMINAL("终端", Icons.Rounded.Terminal),
     SUBSCRIPTIONS("订阅", Icons.Rounded.Cloud),
+    UPDATES("更新", Icons.Rounded.SystemUpdate),
     SETTINGS("设置", Icons.Rounded.Settings)
 }
 
@@ -221,6 +223,7 @@ fun AmadeusApp(
                                     onRun = viewModel::runTerminalCommand
                                 )
                                 AppTab.SUBSCRIPTIONS -> SubscriptionScreen(viewModel, padding.calculateBottomPadding())
+                                AppTab.UPDATES -> UpdatesScreen(padding.calculateBottomPadding(), busy)
                                 AppTab.SETTINGS -> SettingsScreen(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,

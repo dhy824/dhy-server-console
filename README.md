@@ -1,10 +1,10 @@
 # Android 服务器控制台
 
-维护版本 1.3.0（versionCode 14），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端与 Mihomo 管理。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
+维护版本 1.4.0（versionCode 15），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
 
 ## 唯一源码与目录
 
-本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.3.0 的公开源码已同步到 GitHub，正式 APK 发布在 [GitHub Release v1.3.0](https://github.com/dhy824/dhy-server-console/releases/tag/v1.3.0)。本轮仍未安装手机或做真机交互验收。
+本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.3.0 已在 GitHub 发布；1.4.0 当前为本地发布候选，待本次发布确认后通过 GitHub Actions 发布源码与 APK。真机安装及交互仍待验收。
 
 | 入口 | 职责 |
 | --- | --- |
@@ -13,12 +13,28 @@
 | ssh/ConnectionIdentity.kt | 主机、端口、用户名、信任与私钥版本决定复用 |
 | ssh/BoundedOutput.kt / SshEngine.kt | 有界输出、单调时钟超时、取消与超限失败 |
 | service/TunnelService.kt | 单线程连接管理、请求回执、五秒存活/配置检查 |
+| updates/UpdateProtocol.kt / UpdatesViewModel.kt / ui/UpdatesScreen.kt | 项目版本、逐项升级确认、原任务回执恢复 |
 | AppViewModel.kt | 用户动作与请求回执关联；更改设置时停止旧连接 |
 | Test-Apk.ps1 | APK 本体包名/版本/公开默认值/签名验收 |
 | Build-State.ps1 | 构建/发布共用互斥、配置与环境恢复、临时目录及盘符归属校验 |
 | tests/Test-Build-State.ps1 | 合成目录中的构建失败、空文件、并发与清理回归；无需手机或签名 |
 
 隧道关闭后不会残留“运行中”状态；断开后提示重新打开，不做无界重连。持续输出不会不断积累内存；订阅 JSON 超限报错，不返回截断内容伪装成成功。修改连接相关代码，应连同 app/src/test 中的契约测试维护。
+
+## 项目更新（1.4.0）
+
+“更新”页提供 Mihomo、Nginx、CLIProxyAPI、AstrBot 的已安装版本、GitHub 版本与发布说明。先在“设置”导入管理员 SSH 私钥并核对主机指纹，再点“检查所有项目”。来源固定为 MetaCubeX/mihomo、nginx/nginx、router-for-me/CLIProxyAPI、AstrBotDevs/AstrBot；GitHub 由服务器访问，失败显示未核验，可打开官方发布页，不沿用旧检查结果。
+
+服务器前提是已由维护端审阅安装 `/usr/local/lib/server-toolbox/project_updates.py`，客户端固定执行 `/usr/bin/python3 -B /usr/local/lib/server-toolbox/project_updates.py`，通过标准输入发送 JSON。此应用不自动安装服务器组件；组件不可用时检查/准备失败。服务端策略唯一源码位于运维工作区 `个人服务器工具箱/server/project_updates.py`，手机仅实现既有 release、inspect、plan、execute、result 契约。`assets/update_probe.py` 是工具箱同名只读探针的发行快照；更新探针时从唯一源同步并核验一致，不在手机另写升级策略。
+
+Mihomo、Nginx、CLIProxyAPI 按 inspect → plan → 用户确认 → execute → result 执行；确认对话框列明实际版本、影响、备份编号和回退方式。计划限时 5 分钟，绑定连接、固定主机密钥及私钥修订；服务器重新核对程序、配置、服务和目标版本。确认只消费一次，提交前将任务编号、计划摘要和连接指纹原子写入应用私有 no-backup 目录。退出/断网不会自动重发或取消服务器任务；重开应用恢复编号，点“查询上次升级结果”。没有批量升级或自动更新。
+
+- Mihomo：官方包摘要、候选配置、备份、代理与控制器健康检查，失败尝试恢复旧程序。
+- Nginx：GitHub 最近 100 个标签仅作参考，可能含 mainline；安装走原 APT 源和当前索引，不刷新索引，不切软件源，先保存原版本包与配置，再安装并做 nginx/HTTP 验收，失败尝试恢复。
+- CLIProxyAPI：同主版本升级才允许准备计划，跨主版本需单独兼容性评审；只替换程序，OAuth 数据原位保留。
+- AstrBot：仅检查；带 beta 等标记的版本明确显示预览，核心升级继续走既有维护流程。
+
+结果为 queued/running/not_found/needs_attention 或响应不可核验时，阻止新升级，继续查询同一编号。not_found 不证明请求从未到达：联系维护端核对原编号及服务状态，不清应用数据绕过门禁。回执损坏或连接不符也拒绝新提交；恢复原连接/原回执后再查。回执只保存标识，不保存私钥、配置正文或完整计划。更换手机不会迁移 no-backup 回执，必须先在原设备或维护端核对未完成任务。
 
 ## 本机构建
 
@@ -59,13 +75,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 
 验收读取 APK 中的所有 default_host 值，而非旁边生成的 XML；校验签名、包名、版本和非调试标志通过后才晋升正式目录。构建输入与验收结果应随该次实施报告留档。
 
+### GitHub 发行
+
+当前候选版本 1.4.0 / versionCode 15。确认本次公开发布后，将白名单源码与 `release-public/v1.4.0` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.0` 触发 `.github/workflows/publish-release-v1.4.0.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.0。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份保留，旧 v1.3.0 标签与发行包保留。推送前仍按工作区要求确认本次具体公开内容。
+
+本地构建与导出不代表已发布。发布后需检查 Actions、标签指向和下载 APK 的 SHA-256。撤下新 Release 不能把已安装设备降级；设备恢复旧功能建议用原签名构建更高 versionCode 的回退包，避免卸载清数据。
+
 ## 验证范围与回滚
 
-1.3.0 已完成真实构建、Lint、3 项 JVM 契约测试、APK 空 host 与旧签名连续性检查，并已发布公开源码和正式 APK。尚无真机安装、系统杀后台、网络切换、服务器连接交互的实测，不将单测当作这些场景的证明。
+1.4.0 候选已完成 Public Release 构建、Lint、9 项 JVM 契约测试、APK 空 host 与旧签名连续性检查。测试覆盖数字版本、预览标识、计划项目/时效/连接绑定、未知或不匹配回执不得解锁新升级。GitHub 发布待确认。尚无真机安装、系统杀后台、网络切换、服务器连接交互的实测，不将单测当作这些场景的证明。
 
 2026-09-30 构建事务补验：8 项合成状态回归通过，覆盖成功/失败恢复、空文件、中文路径盘符、外来映射、嵌套锁、跨进程并发与目录清理边界。中文工作区内 Public Debug 实际构建通过，构建前后两个配置文件及三个环境变量一致；已有 1.3.0 正式发行目录保留。
 
-源码回滚使用同次备份；设备回滚 Android 通常不能覆盖安装低 versionCode，需要用户自行决定保留数据、卸载或发布更高 versionCode 的回退构建。本工具不会自动卸载、清数据或更换签名。旧 APK 与签名备份必须保留。
+源码回滚使用同次备份（本次运维工作区 output/android-updates-20261006/source-before）；设备回滚 Android 通常不能覆盖安装低 versionCode，需要用户自行决定保留数据、卸载或发布更高 versionCode 的回退构建。本工具不会自动卸载、清数据或更换签名。旧 APK 与签名备份必须保留。
 
 ## 依赖与隐私
 
