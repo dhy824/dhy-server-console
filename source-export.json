@@ -6,7 +6,7 @@
     ".gitignore": "0c7583d9646646ebd571cc781335146b2302f8d0181ee54ca5670e14d01496c6",
     "Build-State.ps1": "a50a183f1a1a205256368cd3ee638abfd3b48bd3efabb44c33ea42b6debfd9e1",
     "LICENSE": "05ec8487cc56ab248184a3e72af1e5a4ce88c23360f57e4ca4e8c0bcfd329349",
-    "README.md": "619cfa9d5979b8a75b31d039afce94d5ac685665d5e93e185a090fbd7672bd84",
+    "README.md": "f1465a93185427a0e14e66e240b06a9f5723a04675c6dea940c696f18f1c7fae",
     "Test-Apk.ps1": "feb6927ccfbd6f6c90bd8ab2412eecebddaa16f2dd6f82a2b5bd9176ed3657cb",
     "app/build.gradle.kts": "ad7022de46c3eaed51796d4e221eb28c5f35fe7ae3b4b7909f6b669837c770fd",
     "app/proguard-rules.pro": "55be3d8554f3ddc9b1cf3f780a72d70fd315d185e8c71c2a164e739c3188dc20",
@@ -49,6 +49,6 @@
     "prepare-toolchain.ps1": "18922e9b96f86cd99eeef9e4fa2505069ab1bc2bf702380dda83d786f8160c9d",
     "settings.gradle.kts": "891bf40f38fef8b5ab785aaaa33fb7c017134b038c5df066a77fc08abeadce75",
     "tests/Test-Build-State.ps1": "db68abcab33ce33f23adca2dea6ef4b6ccece07253db9cc02b89abb4825d18a6",
-    "使用说明.md": "177d9dd5aab3a1f31f2f2b2397a5631739f536dd1876abd5a18d4281631edc7a"
+    "使用说明.md": "fba29537ec54c73a4362ddf319c3ca86be8a5e0eef87fd805f9413bd36a49d07"
   }
 }

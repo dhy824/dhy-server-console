@@ -2,11 +2,11 @@
 
 维护版本 1.4.1（versionCode 16），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
 
-1.4.1 本机正式包已构建，GitHub 发布待本次确认。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
+1.4.1 已于 2026-10-08 经用户确认发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.1)。Actions 37704959564 成功，实际下载 APK 摘要与本地一致。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
 
 ## 唯一源码与目录
 
-本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.4.0 已于 2026-10-06 通过 GitHub Actions 发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.0)。旧 v1.3.0 保留。真机安装及交互仍待验收。
+本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。此前 1.4.0 已于 2026-10-06 通过 GitHub Actions 发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.0)。旧 v1.3.0 保留。真机安装及交互仍待验收。
 
 | 入口 | 职责 |
 | --- | --- |
@@ -81,13 +81,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 
 ### GitHub 发行
 
-当前 GitHub 公开版本仍为 1.4.0 / versionCode 15，本机待发布版本为 1.4.1 / versionCode 16。确认本次公开发布后，将白名单源码与 `release-public/v1.4.1` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.1` 触发 `.github/workflows/publish-release-v1.4.1.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.1。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
+当前 GitHub 公开版本为 1.4.1 / versionCode 16，2026-10-08 本批用户确认、Actions 37704959564 和实际下载摘要核验通过。本批发布流程：将白名单源码与 `release-public/v1.4.1` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.1` 触发 `.github/workflows/publish-release-v1.4.1.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.1。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
 
 本地构建与导出不代表已发布。发布后需检查 Actions、标签指向和下载 APK 的 SHA-256。撤下新 Release 不能把已安装设备降级；设备恢复旧功能建议用原签名构建更高 versionCode 的回退包，避免卸载清数据。
 
 ## 验证范围与回滚
 
-1.4.1 Public Release、Lint 与 12 项 JVM 契约测试通过，APK 空 host、非调试与原签名连续性核验通过。新增覆盖下载进度、修改标记缺失/矛盾、未知阶段及 CLIProxyAPI 跨主版本提示。隔离预览使用实际 Compose 页面源码，实验截图工具不进入正式依赖或公开源码；预览验证结果以本次实施报告为准。真机覆盖安装、后台回收、网络切换与连接交互仍待实测。
+1.4.1 Public Release、Lint 与 12 项 JVM 契约测试通过，APK 空 host、非调试与原签名连续性核验通过。新增覆盖下载进度、修改标记缺失/矛盾、未知阶段及 CLIProxyAPI 跨主版本提示。隔离预览使用实际 Compose 页面源码，实验截图工具不进入正式依赖或公开源码；393dp 手机、320dp/1.5倍字体、700dp 平板与下载中状态四份实际 Compose 预览已生成并检查，未见挤压或遮挡。真机覆盖安装、后台回收、网络切换与连接交互仍待实测。
 
 1.4.0 已完成 Public Release 构建、Lint、9 项 JVM 契约测试、APK 空 host 与旧签名连续性检查。测试覆盖数字版本、预览标识、计划项目/时效/连接绑定、未知或不匹配回执不得解锁新升级。GitHub Actions 37488403331 成功，公开附件 SHA-256 与本地正式包一致。尚无真机安装、系统杀后台、网络切换、服务器连接交互的实测，不将单测当作这些场景的证明。
 
