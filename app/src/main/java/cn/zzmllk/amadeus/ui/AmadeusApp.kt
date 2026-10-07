@@ -700,7 +700,7 @@ private fun PortField(label: String, port: Int, modifier: Modifier = Modifier, o
 }
 
 @Composable
-private fun GlassCard(
+internal fun GlassCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {

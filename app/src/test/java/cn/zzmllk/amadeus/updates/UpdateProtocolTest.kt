@@ -64,4 +64,41 @@ class UpdateProtocolTest {
             assertFalse(UpdateProtocol.resolved(JSONObject().put("status", status), "id"))
         }
     }
+
+    @Test fun cliMajorReleaseIsShownAsRequiringCompatibilityReview() {
+        val release = JSONObject().put("draft", false).put("prerelease", false).put("tag_name", "v8.1.0")
+        val cli = UpdateProtocol.catalog()[2].copy(installed = "7.2.0")
+        assertEquals("跨主版本，需兼容性评审", UpdateProtocol.release(cli, release).status)
+        assertEquals("有上游新版本", UpdateProtocol.release(cli.copy(installed = "8.0.0"), release).status)
+        assertEquals("版本需人工核对", UpdateProtocol.release(cli.copy(installed = "unknown"), release).status)
+    }
+
+    @Test fun downloadProgressAndRefusalDescribeOnlyVerifiedMutationState() {
+        val reply = JSONObject().put("request_id", "id").put("status", "running")
+            .put("phase", "download").put("downloaded_bytes", 5242880)
+        assertTrue(UpdateProtocol.describe(reply).contains("已下载 5.0 MiB"))
+        assertFalse(UpdateProtocol.resolved(reply, "id"))
+        reply.put("status", "refused").put("reason", "download_deadline_exceeded")
+        assertFalse(UpdateProtocol.describe(reply).contains("程序未改动"))
+        assertFalse(UpdateProtocol.describe(reply).contains("已回退"))
+        reply.put("production_change_started", false)
+        assertTrue(UpdateProtocol.describe(reply).contains("程序未改动"))
+        assertTrue(UpdateProtocol.resolved(reply, "id"))
+        // A contradictory receipt must not unlock another production action.
+        reply.put("production_change_started", true)
+        assertFalse(UpdateProtocol.resolved(reply, "id"))
+        assertTrue(UpdateProtocol.describe(reply).contains("回执状态不一致"))
+        reply.put("status", "needs_attention").put("reason", "rollback_requires_attention")
+        assertTrue(UpdateProtocol.describe(reply).contains("回退尚未通过验证"))
+        assertFalse(UpdateProtocol.resolved(reply, "id"))
+    }
+
+    @Test fun malformedAndUnknownProgressDoesNotInventDownloadedSize() {
+        val reply = JSONObject().put("status", "running").put("phase", "unrecognized").put("downloaded_bytes", 123)
+        assertFalse(UpdateProtocol.describe(reply).contains("MiB"))
+        reply.put("phase", "download").put("downloaded_bytes", -1)
+        assertFalse(UpdateProtocol.describe(reply).contains("MiB"))
+        reply.put("downloaded_bytes", "invalid")
+        assertFalse(UpdateProtocol.describe(reply).contains("MiB"))
+    }
 }
