@@ -18,3 +18,4 @@ artifact-backups/
 
 # Exact verified public release asset
 !dist/dhy-server-console-1.4.2.apk
+!dist/dhy-server-console-1.4.3.apk

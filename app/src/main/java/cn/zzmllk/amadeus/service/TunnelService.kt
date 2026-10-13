@@ -14,6 +14,8 @@ import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.ssh.SshEngine
 import cn.zzmllk.amadeus.ssh.connectionIdentity
+import cn.zzmllk.amadeus.ssh.tunnelHttpReady
+import cn.zzmllk.amadeus.ssh.tunnelFailure
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,13 +88,18 @@ class TunnelService : Service() {
         val restoreApi = previous.apiActive || apiForwardPort != null || target == Target.API
         val restoreAstrBot = previous.astrBotActive || astrBotForwardPort != null || target == Target.ASTRBOT
         publish(previous.copy(connecting = true, error = null, requestId = requestId, message = "正在建立 SSH 安全通道……"))
+        var phase = "检查连接配置"
         try {
             val config = configStore.current()
             check(keyStore.hasKey) { "尚未导入 SSH 私钥。" }
             check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
             val signature = connectionIdentity(config, keyStore.revision)
-            if (forceReconnect || session?.isConnected != true || signature != connectionSignature) {
+            phase = "检查已有通道"
+            val reuse = !forceReconnect && session?.isConnected == true && signature == connectionSignature &&
+                activePagesReady()
+            if (!reuse) {
                 disconnectSession()
+                phase = "SSH 身份验证与主机校验"
                 val created = SshEngine.connect(config, keyStore.read())
                 synchronized(sessionLock) {
                     if (destroyed) { created.disconnect(); return }
@@ -101,6 +108,7 @@ class TunnelService : Service() {
                 }
             }
             val connected = session ?: error("SSH 会话未建立。")
+            phase = "建立本地转发"
             if (restoreApi && apiForwardPort == null) {
                 connected.setPortForwardingL("127.0.0.1", config.apiLocalPort, "127.0.0.1", 8317)
                 apiForwardPort = config.apiLocalPort
@@ -109,6 +117,8 @@ class TunnelService : Service() {
                 connected.setPortForwardingL("127.0.0.1", config.astrBotLocalPort, "127.0.0.1", 6185)
                 astrBotForwardPort = config.astrBotLocalPort
             }
+            phase = "检查目标页面"
+            check(activePagesReady()) { "目标页面未响应。" }
             val state = TunnelState(
                 requestId = requestId,
                 connecting = false,
@@ -124,7 +134,11 @@ class TunnelService : Service() {
         } catch (error: Exception) {
             disconnectSession()
             if (destroyed) return
-            val message = error.message ?: "建立隧道失败。"
+            val message = when (error.message) {
+                "尚未导入 SSH 私钥。", "尚未信任服务器主机密钥，请先在设置中测试连接。" -> error.message!!
+                "目标页面未响应。" -> "SSH 已连接，但目标页面未响应；请检查服务器服务或网络后重新打开。"
+                else -> tunnelFailure(error, phase)
+            }
             publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
         }
     }
@@ -147,12 +161,16 @@ class TunnelService : Service() {
     private fun refreshConnectionState() {
         if (destroyed || session == null) return
         try {
-            if (session?.isConnected == true && connectionSignature == connectionIdentity(configStore.current(), keyStore.revision)) return
+            if (session?.isConnected == true && connectionSignature == connectionIdentity(configStore.current(), keyStore.revision) && activePagesReady()) return
         } catch (_: Exception) { }
         disconnectSession()
-        val message = "SSH 已断开或连接设置已变化，请重新打开通道。"
+        val message = "通道已断开、页面未响应或连接设置已变化，请重新打开通道。"
         publish(TunnelState(message = message, error = message))
     }
+
+    private fun activePagesReady(): Boolean =
+        (apiForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
+            (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true)
 
     private fun publish(state: TunnelState) = synchronized(sessionLock) {
         if (!destroyed) {

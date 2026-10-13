@@ -164,7 +164,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     Intent(getApplication(), TunnelService::class.java).setAction(action)
                         .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
                 )
-                withTimeout(25_000) {
+                withTimeout(35_000) {
                     TunnelRuntime.state.first { state ->
                         state.requestId == requestId && !state.connecting && (state.error != null || when (target) {
                             ConsoleTarget.API -> state.apiActive

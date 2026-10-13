@@ -86,7 +86,9 @@ object SshEngine {
         } finally {
             privateKey.fill(0)
         }
-        return jsch.getSession(config.user, config.host, config.sshPort).apply {
+        val created = jsch.getSession(config.user, config.host, config.sshPort)
+        try {
+            return created.apply {
             setConfig("PreferredAuthentications", "publickey")
             setConfig("StrictHostKeyChecking", if (allowUntrusted) "no" else "yes")
             // Keep JSch's complete conventional default set. Only optional post-quantum KEX is
@@ -109,6 +111,10 @@ object SshEngine {
             serverAliveInterval = 15_000
             serverAliveCountMax = 3
             connect(15_000)
+            }
+        } catch (error: Exception) {
+            created.disconnect()
+            throw error
         }
     }
 
