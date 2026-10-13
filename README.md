@@ -1,4 +1,4 @@
-# 1.4.2 蒸馏进度入口（构建验收通过，发布以本批回执为准）
+# 1.4.2 蒸馏进度入口（已发布）
 
 版本1.4.2/versionCode17：总览新增“查看蒸馏进度”，复用已有AstrBot SSH隧道、应用内WebView和系统浏览器，登录后直达Null/仔仔同一个蒸馏中心。服务器1.28.0提供双人看板；不在手机运行分析或保存聊天记录。已有SSH配置、密钥和登录状态沿原应用保留；使用原签名连续构建，旧v1.4.1发行保留。应用不创建分析任务或应用Persona；手机实际覆盖安装与交互仍待真机验收。
 
@@ -10,7 +10,7 @@
 
 ## 唯一源码与目录
 
-本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。此前 1.4.0 已于 2026-10-06 通过 GitHub Actions 发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.0)。旧 v1.3.0 保留。真机安装及交互仍待验收。
+本目录是唯一编辑源；opensource/amadeus-android-server-console 由 export-public-source.py 白名单导出，不能两处手工改。opensource/amadeus-console-release-123 是冻结的 1.2.3 历史快照。1.4.2已正式发布：[APK与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.2)，本批已验证手机393dp、320dp/1.5倍字体和800dp平板实际Compose布局；Release/Lint/12项JVM及空host/非调试/签名连续性通过。真机安装与连接交互未测。此前 1.4.0 已于 2026-10-06 通过 GitHub Actions 发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.0)。旧 v1.3.0 保留。真机安装及交互仍待验收。
 
 | 入口 | 职责 |
 | --- | --- |
@@ -85,7 +85,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 
 ### GitHub 发行
 
-当前 GitHub 公开版本为 1.4.1 / versionCode 16，2026-10-08 本批用户确认、Actions 37704959564 和实际下载摘要核验通过。本批发布流程：将白名单源码与 `release-public/v1.4.1` 已验收文件复制到公开仓库 `dist/`，核对提交只包含本版本源码、文档、APK、校验和及许可证。推送 `codex/android-updates-v1.4.1` 触发 `.github/workflows/publish-release-v1.4.1.yml`：校验文件摘要，创建草稿、上传附件、发布 v1.4.1。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
+当前 GitHub 公开版本为1.4.2 / versionCode17，2026-10-13用户明确授权发布，Actions38421804663及实际APK/附件下载摘要通过。白名单源码与release-public/v1.4.2已验收产物复制到公开仓库dist，codex/android-updates-v1.4.2触发publish-release-v1.4.2.yml；发布提交7a22395ccf925d65002d804c1964c79a878db34b，APK SHA-256为9db1a5c73fce2438e238a9b36b31c2f83b0f0091e0b2314e602f4867ab27f247。原v1.4.1保留。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
 
 本地构建与导出不代表已发布。发布后需检查 Actions、标签指向和下载 APK 的 SHA-256。撤下新 Release 不能把已安装设备降级；设备恢复旧功能建议用原签名构建更高 versionCode 的回退包，避免卸载清数据。
 
