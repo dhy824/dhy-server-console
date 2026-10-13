@@ -15,3 +15,6 @@ build/
 keystore.properties
 artifact-backups/
 *.p12
+
+# Exact verified public release asset
+!dist/dhy-server-console-1.4.2.apk

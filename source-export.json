@@ -3,16 +3,17 @@
   "files": {
     ".github/workflows/publish-release-v1.4.0.yml": "aba30c39036fa2d503b5b7a9e705f233191c66363e54bac75aa6092766f99f77",
     ".github/workflows/publish-release-v1.4.1.yml": "999f9e24329e0efe6a37a42672b4f7e541d9e4a04d46909570ebaa39fc74b477",
-    ".gitignore": "0c7583d9646646ebd571cc781335146b2302f8d0181ee54ca5670e14d01496c6",
+    ".github/workflows/publish-release-v1.4.2.yml": "8872f3a1383da3914441d09e5e6eac50ae5508bcd486bb8fb6f92e16caf3a37c",
+    ".gitignore": "52e15e4da6ea2b03fb1cb8750a2578c247655d4f8f802abbb1c04383cae8b79b",
     "Build-State.ps1": "a50a183f1a1a205256368cd3ee638abfd3b48bd3efabb44c33ea42b6debfd9e1",
     "LICENSE": "05ec8487cc56ab248184a3e72af1e5a4ce88c23360f57e4ca4e8c0bcfd329349",
-    "README.md": "f1465a93185427a0e14e66e240b06a9f5723a04675c6dea940c696f18f1c7fae",
+    "README.md": "d686ce01a8a1e7732c4b6aa7335dd20fa6ef84482d6e99ce6d468340aec04f14",
     "Test-Apk.ps1": "feb6927ccfbd6f6c90bd8ab2412eecebddaa16f2dd6f82a2b5bd9176ed3657cb",
-    "app/build.gradle.kts": "ad7022de46c3eaed51796d4e221eb28c5f35fe7ae3b4b7909f6b669837c770fd",
+    "app/build.gradle.kts": "c3f81dca5bc7b5f0ad2184fa2be8006ecd22455de0f63162a0440cb7ed2efacb",
     "app/proguard-rules.pro": "55be3d8554f3ddc9b1cf3f780a72d70fd315d185e8c71c2a164e739c3188dc20",
     "app/src/main/AndroidManifest.xml": "704f3bbc42593ac1dc977c21d47d67dc251c9b2e9a074b13529cec8543c2ba9a",
     "app/src/main/assets/update_probe.py": "15d91f0c1f6077f2abd075dd85d476beb103e72ef1a5612f15bbbf0bc79890a1",
-    "app/src/main/java/cn/zzmllk/amadeus/AppViewModel.kt": "4867f2c294ffa0668fe080475c0d9ea9185dd53870a259d1466ea8228f849b0a",
+    "app/src/main/java/cn/zzmllk/amadeus/AppViewModel.kt": "f9222610bf88540a02d6fcbdc3942f33e5444de350a00b5b173a5508a468b09f",
     "app/src/main/java/cn/zzmllk/amadeus/MainActivity.kt": "02ef1fb589d13cb2ce37df3cfd481d7803dd6104aa7fdfe4e727ed7b6d786dde",
     "app/src/main/java/cn/zzmllk/amadeus/data/AppConfig.kt": "d22af3a347b631b70c86fdb884e357c52e174ba68c47224e7b9525bba8e2167b",
     "app/src/main/java/cn/zzmllk/amadeus/data/SecureKeyStore.kt": "10e271f028159275d7db69555292741a6efd00c493156379b7c50cb41d78b8e8",
@@ -20,7 +21,7 @@
     "app/src/main/java/cn/zzmllk/amadeus/ssh/BoundedOutput.kt": "dfc6ec5a67c0e6294c8fc7909336ddb2897c3cc3775e89f01808011e830810c8",
     "app/src/main/java/cn/zzmllk/amadeus/ssh/ConnectionIdentity.kt": "e49e90683f2f045e9cf949c2127494afb5ad5ee65441c0a7ef96cb2bb5cf1085",
     "app/src/main/java/cn/zzmllk/amadeus/ssh/SshEngine.kt": "0c8c61834e2152e1627616f653f646bcef9debfd1827808c2cdf9f5c51bb19d9",
-    "app/src/main/java/cn/zzmllk/amadeus/ui/AmadeusApp.kt": "b44eceb0a2aca884ee6e76ae3c2df52b1c69d5c8c02b03e6c3bb6189bb19afe4",
+    "app/src/main/java/cn/zzmllk/amadeus/ui/AmadeusApp.kt": "5ae4dcdceb3b1dbf65bda557e856f9f962f6c33d946f6cf3b51d1b284e8890ff",
     "app/src/main/java/cn/zzmllk/amadeus/ui/SubscriptionScreen.kt": "3fe5028b90820926dc3dd6b7b2e77e39e37ba463484b1b31665de22361693728",
     "app/src/main/java/cn/zzmllk/amadeus/ui/SystemBars.kt": "cf28cedb53e2c6739c06c74101b2eceff5f4d11b27481c65deec069417d27d40",
     "app/src/main/java/cn/zzmllk/amadeus/ui/Theme.kt": "6f5aaacfc1a3d06725b6babceb8a50bf3fe6660ad2d92691be520421f58f122d",
@@ -49,6 +50,6 @@
     "prepare-toolchain.ps1": "18922e9b96f86cd99eeef9e4fa2505069ab1bc2bf702380dda83d786f8160c9d",
     "settings.gradle.kts": "891bf40f38fef8b5ab785aaaa33fb7c017134b038c5df066a77fc08abeadce75",
     "tests/Test-Build-State.ps1": "db68abcab33ce33f23adca2dea6ef4b6ccece07253db9cc02b89abb4825d18a6",
-    "使用说明.md": "fba29537ec54c73a4362ddf319c3ca86be8a5e0eef87fd805f9413bd36a49d07"
+    "使用说明.md": "d497ea3956beab71e26aabf1586e404ed9607c61a83a6f193c6dc66b6ec3d5e0"
   }
 }

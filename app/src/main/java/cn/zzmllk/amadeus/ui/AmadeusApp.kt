@@ -212,6 +212,7 @@ fun AmadeusApp(
                                     busy = busy,
                                     onOpenApi = { viewModel.open(ConsoleTarget.API) },
                                     onOpenAstrBot = { viewModel.open(ConsoleTarget.ASTRBOT) },
+                                    onOpenDistillation = { viewModel.open(ConsoleTarget.ASTRBOT, analysis = true) },
                                     onSpeed = { confirmSpeed = true },
                                     onStop = viewModel::stopAllTunnels,
                                     onOpenSettings = { selected = AppTab.SETTINGS.ordinal }
@@ -385,6 +386,7 @@ private fun DashboardScreen(
     busy: Boolean,
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
+    onOpenDistillation: () -> Unit,
     onSpeed: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit
@@ -426,15 +428,25 @@ private fun DashboardScreen(
                 }
             }
         }
+        ActionCard(
+            icon = Icons.Rounded.Dashboard,
+            eyebrow = "蒸馏中心",
+            title = "Null 与仔仔的分析进度",
+            description = "查看处理进度、检查新增聊天、暂停继续与审核候选。",
+            active = tunnel.astrBotActive,
+            buttonText = "查看蒸馏进度",
+            enabled = !busy,
+            onClick = onOpenDistillation
+        )
         GlassCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Speed, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Speed, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(12.dp))
                     Text("节点测速与切换", style = MaterialTheme.typography.titleMedium)
-                    Text("OpenAI 组直测 ChatGPT 官网", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
                 }
-                FilledTonalButton(onClick = onSpeed, enabled = !busy) { Text("测速切换") }
+                Text("OpenAI 组直测 ChatGPT 官网", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+                FilledTonalButton(onClick = onSpeed, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("测速切换") }
             }
         }
         if (tunnel.error != null) {
@@ -443,18 +455,14 @@ private fun DashboardScreen(
             }
         }
         GlassCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Cloud, contentDescription = null, tint = GoogleBlue)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Cloud, contentDescription = null, tint = GoogleBlue)
+                    Spacer(Modifier.width(12.dp))
                     Text("连接目标", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (config.host.isBlank()) "尚未配置服务器" else "已配置 SSH 连接参数",
-                        color = MutedInk,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
                 }
-                OutlinedButton(onClick = onOpenSettings) { Text("设置") }
+                Text(if (config.host.isBlank()) "尚未配置服务器" else "已配置 SSH 连接参数", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("设置") }
             }
             if (tunnel.apiActive || tunnel.astrBotActive) {
                 Spacer(Modifier.height(12.dp))
@@ -515,6 +523,25 @@ private fun ActionCard(
     modifier: Modifier = Modifier
 ) {
     GlassCard(modifier) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 360.dp || LocalDensity.current.fontScale > 1.2f
+            if (compact) {
+                Column {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(15.dp), color = GoogleBlueSoft) {
+                            Icon(icon, contentDescription = null, tint = GoogleBlueDark, modifier = Modifier.padding(13.dp).size(27.dp))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        StatusBadge(active, if (active) "已连接" else "未连接")
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(eyebrow, color = GoogleBlueDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(5.dp))
+                    Text(description, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
         Row(verticalAlignment = Alignment.Top) {
             Surface(shape = RoundedCornerShape(15.dp), color = GoogleBlueSoft) {
                 Icon(icon, contentDescription = null, tint = GoogleBlueDark, modifier = Modifier.padding(13.dp).size(27.dp))
@@ -528,6 +555,8 @@ private fun ActionCard(
                 Text(description, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
             }
             StatusBadge(active, if (active) "已连接" else "未连接")
+        }
+            }
         }
         Spacer(Modifier.height(18.dp))
         Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().height(50.dp)) {

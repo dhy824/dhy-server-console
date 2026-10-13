@@ -1,9 +1,9 @@
 ﻿{
     "Package":  "cn.zzmllk.amadeus",
-    "Version":  "1.4.1",
-    "VersionCode":  16,
+    "Version":  "1.4.2",
+    "VersionCode":  17,
     "PublicDefaultsVerified":  true,
     "SignatureVerified":  true,
     "SignerContinuityVerified":  true,
-    "Sha256":  "3a62560706e59e1330c2326f3cac5a6951fcebc4586b75b5eb5b961fe20de567"
+    "Sha256":  "9db1a5c73fce2438e238a9b36b31c2f83b0f0091e0b2314e602f4867ab27f247"
 }
