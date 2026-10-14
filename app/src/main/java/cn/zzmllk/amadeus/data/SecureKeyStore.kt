@@ -1,31 +1,38 @@
 package cn.zzmllk.amadeus.data
 
 import android.content.Context
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
 import java.io.File
-import java.nio.ByteBuffer
 import java.security.KeyStore
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import android.security.KeyStoreException as AndroidKeyStoreException
+import android.security.keystore.KeyPermanentlyInvalidatedException
+import javax.crypto.AEADBadTagException
 
 class SecureKeyStore(context: Context) {
     private val keyFile = File(context.filesDir, "ssh_identity.enc")
+    private val previousFile = File(context.filesDir, "ssh_identity.previous.enc")
+    private val storage = StoredIdentity(AndroidVault(), ::readPayload, ::writePayload)
 
-    val hasKey: Boolean get() = keyFile.isFile && keyFile.length() in 21L..1_048_768L
-    val revision: String get() {
-        if (!hasKey) return "missing"
-        return MessageDigest.getInstance("SHA-256").digest(keyFile.readBytes())
-            .joinToString("") { "%02x".format(it) }
+    val hasKey: Boolean get() = synchronized(STORAGE_LOCK) {
+        listOf(keyFile, File(keyFile.path + ".bak")).any { it.isFile && it.length() in 21L..MAX_IDENTITY_PAYLOAD.toLong() }
+    }
+    val revision: String get() = synchronized(STORAGE_LOCK) {
+        if (!hasKey) return@synchronized "missing"
+        val payload = readPayload()
+        try { MessageDigest.getInstance("SHA-256").digest(payload).joinToString("") { "%02x".format(it) } }
+        finally { payload.fill(0) }
     }
 
     fun save(privateKey: ByteArray) {
-        var ciphertext: ByteArray? = null
-        var payload: ByteArray? = null
+        synchronized(STORAGE_LOCK) {
         try {
             require(privateKey.size in 64..1_048_576) { "私钥文件大小不正确。" }
             require(!looksLikePublicKey(privateKey)) {
@@ -35,19 +42,13 @@ class SecureKeyStore(context: Context) {
                 "选择的文件不是受支持的 SSH 私钥。请选择 OpenSSH、RSA、EC 或 PKCS#8 私钥。"
             }
 
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-            val encrypted = cipher.doFinal(privateKey)
-            ciphertext = encrypted
-            val iv = cipher.iv
-            payload = ByteBuffer.allocate(8 + iv.size + encrypted.size)
-                .putInt(iv.size)
-                .put(iv)
-                .putInt(encrypted.size)
-                .put(encrypted)
-                .array()
+            storage.replace(privateKey)
+        } finally { privateKey.fill(0) }
+        }
+    }
 
-            val atomicFile = AtomicFile(keyFile)
+    private fun atomicWrite(file: File, payload: ByteArray) {
+            val atomicFile = AtomicFile(file)
             val stream = atomicFile.startWrite()
             try {
                 stream.write(payload)
@@ -57,47 +58,86 @@ class SecureKeyStore(context: Context) {
                 atomicFile.failWrite(stream)
                 throw error
             }
-        } finally {
-            privateKey.fill(0)
-            ciphertext?.fill(0)
-            payload?.fill(0)
-        }
     }
 
-    fun read(): ByteArray {
+    private fun readPayload(): ByteArray {
         check(hasKey) { "尚未导入 SSH 私钥。" }
-        val buffer = ByteBuffer.wrap(keyFile.readBytes())
-        val ivSize = buffer.int
-        require(ivSize in 12..32 && buffer.remaining() > ivSize + 4) { "私钥存储已损坏。" }
-        val iv = ByteArray(ivSize).also(buffer::get)
-        val cipherSize = buffer.int
-        require(cipherSize == buffer.remaining()) { "私钥存储长度不正确。" }
-        val ciphertext = ByteArray(cipherSize).also(buffer::get)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(128, iv))
-        return cipher.doFinal(ciphertext)
+        return try { AtomicFile(keyFile).readFully() }
+        catch (error: Exception) { throw IdentityKeyException("无法读取本机私钥存储，请在设置中重新导入原 SSH 私钥。", cause = error) }
     }
 
-    fun clear() {
+    private fun writePayload(payload: ByteArray) {
+        if (hasKey) {
+            val old = readPayload()
+            try { atomicWrite(previousFile, old) } finally { old.fill(0) }
+        }
+        atomicWrite(keyFile, payload)
+        val committed = readPayload()
+        try { check(MessageDigest.isEqual(committed, payload)) { "私钥保存校验失败，请重试导入；原加密备份已保留。" } }
+        finally { committed.fill(0) }
+    }
+
+    fun read(): ByteArray = synchronized(STORAGE_LOCK) { storage.read() }
+
+    fun clear() = synchronized(STORAGE_LOCK) {
         AtomicFile(keyFile).delete()
-        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(KEY_ALIAS)
+        AtomicFile(previousFile).delete()
+        AndroidVault().clearOwned()
     }
 
-    private fun getOrCreateKey(): SecretKey {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+    private class AndroidVault : IdentityCipherVault {
+        private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        private fun <T> access(block: () -> T): T {
+            try { return block() } catch (error: Exception) {
+                val chain = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
+                val platform = chain.filterIsInstance<AndroidKeyStoreException>().firstOrNull()
+                val code = if (Build.VERSION.SDK_INT >= 33) platform?.numericErrorCode else null
+                val retry = Build.VERSION.SDK_INT >= 33 && platform?.isTransientFailure == true &&
+                    platform.retryPolicy == AndroidKeyStoreException.RETRY_WITH_EXPONENTIAL_BACKOFF
+                val message = when {
+                    chain.any { it is AEADBadTagException || it is KeyPermanentlyInvalidatedException } ->
+                        "本机加密密钥已失效，请在设置中点“更换私钥”，重新导入原 SSH 私钥。"
+                    Build.VERSION.SDK_INT >= 33 && platform?.requiresUserAuthentication() == true ->
+                        "本机密钥库需要解锁，请解锁手机后重新打开通道。"
+                    retry -> "本机密钥库暂时不可用，请稍后重新打开通道。"
+                    else -> "本机密钥库无法读取或使用密钥；请重启手机后重试，仍失败时在设置中重新导入原 SSH 私钥。"
+                }
+                throw IdentityKeyException(message + (code?.let { "（Keystore 错误 $it）" } ?: ""), retry, error)
+            }
+        }
+        override fun existing(alias: String): SecretKey? = access { store().getKey(alias, null) as? SecretKey }
+        override fun create(alias: String): SecretKey = access {
+        val keyStore = store()
+        (keyStore.getKey(alias, null) as? SecretKey)?.let { return@access it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         generator.init(
             KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
+                alias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
+                .setUserAuthenticationRequired(false)
+                .setRandomizedEncryptionRequired(true)
                 .build()
         )
-        return generator.generateKey()
+        generator.generateKey()
+        }
+        override fun encrypt(key: SecretKey, plaintext: ByteArray) = access {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+            cipher.iv to cipher.doFinal(plaintext)
+        }
+        override fun decrypt(key: SecretKey, iv: ByteArray, ciphertext: ByteArray) = access {
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+            cipher.doFinal(ciphertext)
+        }
+        fun clearOwned() = access {
+            val keyStore = store()
+            keyStore.aliases().toList().filter(::ownedIdentityAlias).forEach(keyStore::deleteEntry)
+        }
     }
 
     private fun containsAscii(source: ByteArray, marker: String): Boolean {
@@ -125,7 +165,7 @@ class SecureKeyStore(context: Context) {
     }
 
     private companion object {
-        const val KEY_ALIAS = "amadeus_ssh_identity_v1"
+        val STORAGE_LOCK = Any()
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         val SUPPORTED_PRIVATE_KEY_HEADERS = listOf(
             "-----BEGIN OPENSSH PRIVATE KEY-----",

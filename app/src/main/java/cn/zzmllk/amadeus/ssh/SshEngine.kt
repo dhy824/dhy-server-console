@@ -75,13 +75,13 @@ object SshEngine {
     }
 
     fun connect(config: AppConfig, privateKey: ByteArray, allowUntrusted: Boolean = false): Session {
-        validate(config)
         val jsch = JSch()
-        if (!allowUntrusted) {
-            check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
-            jsch.setHostKeyRepository(PinnedHostKeyRepository(config))
-        }
         try {
+            validate(config)
+            if (!allowUntrusted) {
+                check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
+                jsch.setHostKeyRepository(PinnedHostKeyRepository(config))
+            }
             jsch.addIdentity("amadeus-android", privateKey, null, null)
         } finally {
             privateKey.fill(0)

@@ -1,3 +1,13 @@
+# 2026-10-14 本机 Keystore 恢复修复 1.4.4
+
+当前维护版本1.4.4/versionCode19，沿原签名覆盖安装；正式发行入口为 https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.4 。本次修复截图中的KeyStoreException：读取旧密文时只查已有Android Keystore密钥，不再因密钥缺失生成错误的新密钥；本机密钥读取错误与SSH认证、主机校验错误分别提示。系统明确允许即时重试的临时故障最多重试三次；永久失效提示重新导入，不循环建通道。
+
+若更新后仍提示密钥失效或无法使用，先解锁或重启手机再试；仍失败时打开“设置 → 更换私钥”，选择原来连接服务器的SSH私钥文件（不是.pub公钥）。重新导入用新的应用专属AES密钥，先实际加解密验证，再原子保存，并保留旧加密备份和原AES别名。无需清除应用数据、更换服务器SSH密钥或重新填写所有设置。旧系统AES密钥确实丢失时，更新无法从密文恢复私钥，必须有原SSH私钥文件；若手机Keystore服务仍无法创建或使用新密钥，应用会明确失败并保留原数据，不改用明文存储。PlayIntegrityFix是否导致此次故障尚未证实，本应用不会更改它或系统设置。
+
+Release、Lint、26项JVM测试及APK空host/非调试/原签名连续性通过。新增11项实际AES/GCM测试覆盖旧格式、缺失密钥、临时/永久故障、显式重新导入、坏密文与提交异常；JVM测试不代表小米14 Ultra/Android16硬件Keystore或手机网络已验收。手机/平板布局、Cookie和服务器严格主机校验保持既有方式。
+
+旧v1.4.3正式发行及签名保留；原加密备份位于应用私有ssh_identity.previous.enc，仅显式更换私钥时产生，不上传。回退不卸载、不清数据；Android通常不能直接覆盖较低versionCode，应沿原签名构建更高versionCode的回退包，并保留本版新旧密文读取能力，不能用旧版读不懂的新格式覆盖恢复。发布与下载核验回执见维护工作区output/keystore-version-repair-20261014；未获得成功回执前不能称GitHub发布完成。
+
 # 2026-10-14 隧道健康与错误提示 1.4.3（已正式发布）
 
 当前源码和原签名正式包为1.4.3/versionCode18，已通过GitHub Actions38436101635正式发布：[APK与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.3)。实际下载的APK/许可证附件逐字节一致，校验清单和JSON按内容核验一致。旧1.4.2保留。已有通道在复用前和五秒状态检查中探测固定回环页面；页面不响应时不再显示运行中，用户再次打开时仅重建一次，并恢复原已打开的两个转发。新通道通过页面检查才显示成功。关闭/网络失败不进行无界自动重连，保持现有密钥和严格主机校验。
@@ -14,7 +24,7 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 # Android 服务器控制台
 
-维护版本 1.4.3（versionCode 18），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
+维护版本 1.4.4（versionCode 19），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
 
 1.4.1 已于 2026-10-08 经用户确认发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.1)。Actions 37704959564 成功，实际下载 APK 摘要与本地一致。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
 
@@ -95,7 +105,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 
 ### GitHub 发行
 
-当前 GitHub 公开版本为1.4.2 / versionCode17，2026-10-13用户明确授权发布，Actions38421804663及实际APK/附件下载摘要通过。白名单源码与release-public/v1.4.2已验收产物复制到公开仓库dist，codex/android-updates-v1.4.2触发publish-release-v1.4.2.yml；发布提交7a22395ccf925d65002d804c1964c79a878db34b，APK SHA-256为9db1a5c73fce2438e238a9b36b31c2f83b0f0091e0b2314e602f4867ab27f247。原v1.4.1保留。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
+历史 GitHub 公开版本1.4.2 / versionCode17于2026-10-13经用户明确授权发布，Actions38421804663及实际APK/附件下载摘要通过。白名单源码与release-public/v1.4.2已验收产物复制到公开仓库dist，codex/android-updates-v1.4.2触发publish-release-v1.4.2.yml；发布提交7a22395ccf925d65002d804c1964c79a878db34b，APK SHA-256为9db1a5c73fce2438e238a9b36b31c2f83b0f0091e0b2314e602f4867ab27f247。原v1.4.1保留。已有同名 Release 时拒绝覆盖，失败先检查草稿和运行记录，不强推、不替换已公开附件。源码/签名备份与旧 v1.4.0 保留。推送前仍按工作区要求确认本次具体公开内容。
 
 本地构建与导出不代表已发布。发布后需检查 Actions、标签指向和下载 APK 的 SHA-256。撤下新 Release 不能把已安装设备降级；设备恢复旧功能建议用原签名构建更高 versionCode 的回退包，避免卸载清数据。
 

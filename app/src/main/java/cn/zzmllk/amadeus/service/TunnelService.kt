@@ -99,8 +99,10 @@ class TunnelService : Service() {
                 activePagesReady()
             if (!reuse) {
                 disconnectSession()
+                phase = "读取手机中的 SSH 私钥"
+                val privateKey = keyStore.read()
                 phase = "SSH 身份验证与主机校验"
-                val created = SshEngine.connect(config, keyStore.read())
+                val created = try { SshEngine.connect(config, privateKey) } finally { privateKey.fill(0) }
                 synchronized(sessionLock) {
                     if (destroyed) { created.disconnect(); return }
                     session = created

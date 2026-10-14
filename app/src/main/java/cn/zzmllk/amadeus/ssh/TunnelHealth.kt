@@ -4,6 +4,7 @@ import java.net.HttpURLConnection
 import java.net.Proxy
 import java.net.URL
 import java.util.Locale
+import cn.zzmllk.amadeus.data.IdentityKeyException
 
 /** Probe fixed loopback HTTP services; no credentials, redirects, body reads or system proxy. */
 fun tunnelHttpReady(port: Int, timeoutMillis: Int = 1_500): Boolean {
@@ -25,6 +26,7 @@ fun tunnelHttpReady(port: Int, timeoutMillis: Int = 1_500): Boolean {
 /** Error text never includes peer addresses, user names, key paths or raw library messages. */
 fun tunnelFailure(error: Exception, phase: String): String {
     val chain = generateSequence<Throwable>(error) { it.cause }.take(8).toList()
+    chain.filterIsInstance<IdentityKeyException>().firstOrNull()?.let { return "$phase：${it.message}" }
     val text = chain.joinToString(" ") { it.message.orEmpty() }.lowercase(Locale.ROOT)
     val detail = when {
         chain.any { it is java.net.BindException } || "address already in use" in text || "portforwardingl" in text -> "本机端口被占用，请检查设置中的本地端口。"

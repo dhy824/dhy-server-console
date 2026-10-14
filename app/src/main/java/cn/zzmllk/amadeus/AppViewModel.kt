@@ -112,10 +112,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearPrivateKey() {
-        stopAllTunnels()
-        keyStore.clear()
-        mutableKeyImported.value = false
-        mutableMessage.value = "已移除手机中的 SSH 私钥。"
+        viewModelScope.launch {
+            runBusy("已移除手机中的 SSH 私钥。") {
+                stopAllTunnels()
+                try { withContext(Dispatchers.IO) { keyStore.clear() } }
+                finally { mutableKeyImported.value = keyStore.hasKey }
+            }
+        }
     }
 
     fun testConnection() {

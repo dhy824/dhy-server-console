@@ -684,7 +684,7 @@ private fun SettingsScreen(
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "请选择没有 .pub 后缀的私钥文件；文件选择器会显示所有文件。",
+                "请选择没有 .pub 后缀的私钥文件。系统环境变化导致无法解密时，点“更换私钥”重新导入原文件，无需清除应用数据。",
                 color = MutedInk,
                 style = MaterialTheme.typography.bodySmall
             )
