@@ -105,8 +105,7 @@ private enum class AppTab(val title: String, val icon: ImageVector) {
     TERMINAL("终端", Icons.Rounded.Terminal),
     SUBSCRIPTIONS("订阅", Icons.Rounded.Cloud),
     UPDATES("更新", Icons.Rounded.SystemUpdate),
-    SETTINGS("设置", Icons.Rounded.Settings),
-    REVIEW("审核", Icons.Rounded.CheckCircle)
+    SETTINGS("设置", Icons.Rounded.Settings)
 }
 
 @Composable
@@ -124,6 +123,9 @@ fun AmadeusApp(
     val snackbar = remember { SnackbarHostState() }
     val navigationHaze = remember { HazeState() }
     var selected by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(selected) {
+        if (selected !in AppTab.entries.indices) selected = AppTab.HOME.ordinal
+    }
     var confirmSpeed by remember { mutableStateOf(false) }
     val importKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importPrivateKey(uri)
@@ -205,7 +207,7 @@ fun AmadeusApp(
                                 .fillMaxWidth()
                         ) {
                             AppHeader(tunnel = tunnel, busy = busy)
-                            when (AppTab.entries[selected]) {
+                            when (AppTab.entries.getOrElse(selected) { AppTab.HOME }) {
                                 AppTab.HOME -> DashboardScreen(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,
@@ -214,6 +216,7 @@ fun AmadeusApp(
                                     onOpenApi = { viewModel.open(ConsoleTarget.API) },
                                     onOpenAstrBot = { viewModel.open(ConsoleTarget.ASTRBOT) },
                                     onOpenDistillation = { viewModel.open(ConsoleTarget.ASTRBOT, analysis = true) },
+                                    onOpenReview = { viewModel.open(ConsoleTarget.ASTRBOT, review = true) },
                                     onSpeed = { confirmSpeed = true },
                                     onStop = viewModel::stopAllTunnels,
                                     onOpenSettings = { selected = AppTab.SETTINGS.ordinal }
@@ -226,7 +229,6 @@ fun AmadeusApp(
                                 )
                                 AppTab.SUBSCRIPTIONS -> SubscriptionScreen(viewModel, padding.calculateBottomPadding())
                                 AppTab.UPDATES -> UpdatesScreen(padding.calculateBottomPadding(), busy)
-                                AppTab.REVIEW -> ReviewScreen(padding.calculateBottomPadding(), busy, { viewModel.open(ConsoleTarget.ASTRBOT, review = true) })
                                 AppTab.SETTINGS -> SettingsScreen(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,
@@ -389,6 +391,7 @@ private fun DashboardScreen(
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
     onOpenDistillation: () -> Unit,
+    onOpenReview: () -> Unit,
     onSpeed: () -> Unit,
     onStop: () -> Unit,
     onOpenSettings: () -> Unit
@@ -440,6 +443,7 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenDistillation
         )
+        ReviewSection(otherBusy = busy, onOpen = onOpenReview)
         GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

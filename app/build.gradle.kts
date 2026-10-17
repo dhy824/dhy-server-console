@@ -24,8 +24,8 @@ android {
         applicationId = "cn.zzmllk.amadeus"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.4.5"
+        versionCode = 21
+        versionName = "1.4.6"
 
         resValue("string", "default_host", embeddedDefaults.getProperty("host", ""))
         resValue("string", "default_ssh_port", embeddedDefaults.getProperty("sshPort", "22"))

@@ -183,7 +183,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         "http://127.0.0.1:${config.value.apiLocalPort}/management.html"
                     )
                     ConsoleTarget.ASTRBOT -> ConsoleRequest(
-                        if (review) "审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
+                        if (review) "AstrBot 审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
                         "http://127.0.0.1:${config.value.astrBotLocalPort}" + if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""
                     )
                 }
