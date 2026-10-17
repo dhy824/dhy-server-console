@@ -1,2 +1,2 @@
-837db6905ead152e4667d4ba03825c0650c09685d1ef472bb6af82678874117e  dhy-server-console-1.4.4.apk
-b7abb341754d76e3d8efb11e9b97aac6cde07228b791ca5434f1c0c47b6a2b14  licenses-and-notices.zip
+fb2d36119751273e65d5b40490cf2c8891cdecc934a716afd9fbb45b5f15b474  dhy-server-console-1.4.5.apk
+d8b1d27a1ed4f2b4532fa414d55e450ae23b8c782f900c7a7f1f5f32d5f0d7c9  licenses-and-notices.zip

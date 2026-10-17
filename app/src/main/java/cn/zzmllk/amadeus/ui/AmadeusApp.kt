@@ -105,7 +105,8 @@ private enum class AppTab(val title: String, val icon: ImageVector) {
     TERMINAL("终端", Icons.Rounded.Terminal),
     SUBSCRIPTIONS("订阅", Icons.Rounded.Cloud),
     UPDATES("更新", Icons.Rounded.SystemUpdate),
-    SETTINGS("设置", Icons.Rounded.Settings)
+    SETTINGS("设置", Icons.Rounded.Settings),
+    REVIEW("审核", Icons.Rounded.CheckCircle)
 }
 
 @Composable
@@ -225,6 +226,7 @@ fun AmadeusApp(
                                 )
                                 AppTab.SUBSCRIPTIONS -> SubscriptionScreen(viewModel, padding.calculateBottomPadding())
                                 AppTab.UPDATES -> UpdatesScreen(padding.calculateBottomPadding(), busy)
+                                AppTab.REVIEW -> ReviewScreen(padding.calculateBottomPadding(), busy, { viewModel.open(ConsoleTarget.ASTRBOT, review = true) })
                                 AppTab.SETTINGS -> SettingsScreen(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,

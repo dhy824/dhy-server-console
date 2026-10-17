@@ -19,6 +19,33 @@ data class HostProbe(
 )
 
 object SshEngine {
+    fun reviewCenterRequest(config: AppConfig, privateKey: ByteArray): String {
+        val session = connect(config, privateKey)
+        var channel: ChannelExec? = null
+        return try {
+            val exec = session.openChannel("exec") as ChannelExec
+            channel = exec
+            val output = BoundedOutput(262_144)
+            val errors = BoundedOutput(65_536)
+            exec.setCommand("/usr/bin/python3 -B /opt/astrbot/identity-guard-root/plugin/review_center.py")
+            exec.setInputStream(ByteArrayInputStream("{\"action\":\"list\"}\n".toByteArray(Charsets.UTF_8)))
+            exec.setOutputStream(output, true)
+            exec.setErrStream(errors, true)
+            exec.connect(10_000)
+            val deadline = SystemClock.elapsedRealtime() + 45_000
+            while (!exec.isClosed && SystemClock.elapsedRealtime() < deadline) {
+                check(!output.exceeded && !errors.exceeded) { "审核响应超限，请稍后刷新。" }
+                Thread.sleep(50)
+            }
+            check(exec.isClosed && !output.exceeded && !errors.exceeded) { "审核读取超时或超限，上次列表保留。" }
+            check(exec.exitStatus == 0) { "审核组件不可用，请检查连接及服务器版本。" }
+            output.text()
+        } finally {
+            channel?.disconnect()
+            session.disconnect()
+        }
+    }
+
     fun projectUpdateRequest(config: AppConfig, privateKey: ByteArray, request: String): String {
         require(request.toByteArray(Charsets.UTF_8).size <= 65535) { "更新请求过长。" }
         val session = connect(config, privateKey)

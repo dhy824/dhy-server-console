@@ -1,3 +1,9 @@
+# 2026-10-17 通用审核中心 1.4.5
+
+当前维护源码1.4.5/versionCode20。新增“审核”页，显示服务器批次、已审/待审和最近保存时间；经现有SSH通道在应用内打开插件审核中心，手机和电脑共用保存记录。评分支持备注、标签及可选分数，多端冲突会提示处理；审核只记录意见，不直接应用人格或执行运维。
+
+沿原包名、原签名和Keystore读写方式，保留用户连接、密钥、主机信任和WebView登录。Public构建默认空host；不内嵌题目、评分或凭据。唯一源码仍是本目录，公开导出沿export-public-source.py；服务器数据/实现不进入公开APK源码。版本回退用原签名更高versionCode并保留新旧密文读取能力，不卸载清数据。构建/Lint/JVM/签名已过，正式发行、下载核验和手机真机交互分别以本批回执为准。
+
 # 2026-10-14 本机 Keystore 恢复修复 1.4.4
 
 当前维护版本1.4.4/versionCode19，沿原签名覆盖安装；已通过GitHub Actions38496112672正式发布，实际下载四附件与标签绑定均核验通过；APK SHA256为837db6905ead152e4667d4ba03825c0650c09685d1ef472bb6af82678874117e。正式发行入口为 https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.4 。本次修复截图中的KeyStoreException：读取旧密文时只查已有Android Keystore密钥，不再因密钥缺失生成错误的新密钥；本机密钥读取错误与SSH认证、主机校验错误分别提示。系统明确允许即时重试的临时故障最多重试三次；永久失效提示重新导入，不循环建通道。
@@ -24,7 +30,7 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 # Android 服务器控制台
 
-维护版本 1.4.4（versionCode 19），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
+维护版本 1.4.5（versionCode 20），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
 
 1.4.1 已于 2026-10-08 经用户确认发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.1)。Actions 37704959564 成功，实际下载 APK 摘要与本地一致。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
 

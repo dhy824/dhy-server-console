@@ -34,6 +34,8 @@ import java.util.Date
 import java.util.Locale
 import org.json.JSONObject
 
+const val REVIEW_ROUTE = "/#/plugin-page/astrbot_plugin_identity_guard/review"
+
 const val DISTILLATION_ROUTE = "/#/plugin-page/astrbot_plugin_identity_guard/analysis"
 
 enum class ConsoleTarget { API, ASTRBOT }
@@ -152,7 +154,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableFingerprint.value = null
     }
 
-    fun open(target: ConsoleTarget, analysis: Boolean = false) {
+    fun open(target: ConsoleTarget, analysis: Boolean = false, review: Boolean = false) {
         viewModelScope.launch {
             runBusy(null) {
                 check(keyStore.hasKey) { "请先在设置中导入 SSH 私钥。" }
@@ -181,8 +183,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         "http://127.0.0.1:${config.value.apiLocalPort}/management.html"
                     )
                     ConsoleTarget.ASTRBOT -> ConsoleRequest(
-                        if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
-                        "http://127.0.0.1:${config.value.astrBotLocalPort}" + if (analysis) DISTILLATION_ROUTE else ""
+                        if (review) "审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
+                        "http://127.0.0.1:${config.value.astrBotLocalPort}" + if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""
                     )
                 }
                 mutableOpenConsole.emit(request)
