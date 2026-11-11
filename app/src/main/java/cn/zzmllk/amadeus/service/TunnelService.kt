@@ -184,7 +184,7 @@ class TunnelService : Service() {
     private fun activePagesReady(): Boolean =
         (apiForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
             (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
-            (zakoForwardPort?.let { tunnelHttpReady(it) } ?: true)
+            (zakoForwardPort?.let { tunnelHttpReady(it, "/health", 5_000) } ?: true)
 
     private fun publish(state: TunnelState) = synchronized(sessionLock) {
         if (!destroyed) {
@@ -246,3 +246,4 @@ class TunnelService : Service() {
         private const val NOTIFICATION_ID = 8317
     }
 }
+

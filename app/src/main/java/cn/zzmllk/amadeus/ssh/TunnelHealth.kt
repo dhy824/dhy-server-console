@@ -7,11 +7,12 @@ import java.util.Locale
 import cn.zzmllk.amadeus.data.IdentityKeyException
 
 /** Probe fixed loopback HTTP services; no credentials, redirects, body reads or system proxy. */
-fun tunnelHttpReady(port: Int, timeoutMillis: Int = 1_500): Boolean {
+fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): Boolean {
     if (port !in 1024..65535) return false
+    if (!path.startsWith("/") || path.contains("..") || path.any { it.isISOControl() || it == '\\' }) return false
     var connection: HttpURLConnection? = null
     return try {
-        connection = URL("http://127.0.0.1:$port/").openConnection(Proxy.NO_PROXY) as HttpURLConnection
+        connection = URL("http://127.0.0.1:$port$path").openConnection(Proxy.NO_PROXY) as HttpURLConnection
         connection.connectTimeout = timeoutMillis
         connection.readTimeout = timeoutMillis
         connection.instanceFollowRedirects = false
@@ -22,6 +23,9 @@ fun tunnelHttpReady(port: Int, timeoutMillis: Int = 1_500): Boolean {
         connection?.disconnect()
     }
 }
+
+/** Backward-compatible overload for existing callers that pass only a timeout. */
+fun tunnelHttpReady(port: Int, timeoutMillis: Int): Boolean = tunnelHttpReady(port, "/", timeoutMillis)
 
 /** Error text never includes peer addresses, user names, key paths or raw library messages. */
 fun tunnelFailure(error: Exception, phase: String): String {
@@ -40,3 +44,4 @@ fun tunnelFailure(error: Exception, phase: String): String {
     val type = chain.last().javaClass.simpleName.replace(Regex("[^A-Za-z0-9_]"), "").take(48).ifBlank { "Exception" }
     return "$phase：$detail（$type）"
 }
+
