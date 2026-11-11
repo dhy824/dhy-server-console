@@ -27,6 +27,7 @@ data class TunnelState(
     val connecting: Boolean = false,
     val apiActive: Boolean = false,
     val astrBotActive: Boolean = false,
+    val zakoActive: Boolean = false,
     val message: String = "隧道未启动",
     val error: String? = null,
     val requestId: String = ""
@@ -48,6 +49,7 @@ class TunnelService : Service() {
     private var connectionSignature = ""
     private var apiForwardPort: Int? = null
     private var astrBotForwardPort: Int? = null
+    private var zakoForwardPort: Int? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -65,6 +67,7 @@ class TunnelService : Service() {
         when (intent?.action) {
             ACTION_START_API -> executor.execute { startTunnel(Target.API, forceReconnect, requestId) }
             ACTION_START_ASTRBOT -> executor.execute { startTunnel(Target.ASTRBOT, forceReconnect, requestId) }
+            ACTION_START_ZAKO -> executor.execute { startTunnel(Target.ZAKO, forceReconnect, requestId) }
             ACTION_STOP_ALL -> executor.execute { stopAll("隧道已停止") }
         }
         return START_NOT_STICKY
@@ -87,6 +90,7 @@ class TunnelService : Service() {
         val previous = TunnelRuntime.state.value
         val restoreApi = previous.apiActive || apiForwardPort != null || target == Target.API
         val restoreAstrBot = previous.astrBotActive || astrBotForwardPort != null || target == Target.ASTRBOT
+        val restoreZako = previous.zakoActive || zakoForwardPort != null || target == Target.ZAKO
         publish(previous.copy(connecting = true, error = null, requestId = requestId, message = "正在建立 SSH 安全通道……"))
         var phase = "检查连接配置"
         try {
@@ -119,6 +123,11 @@ class TunnelService : Service() {
                 connected.setPortForwardingL("127.0.0.1", config.astrBotLocalPort, "127.0.0.1", 6185)
                 astrBotForwardPort = config.astrBotLocalPort
             }
+            if (restoreZako && zakoForwardPort == null) {
+                check(config.apiLocalPort != ZAKO_LOCAL_PORT && config.astrBotLocalPort != ZAKO_LOCAL_PORT) { "Zako 本地端口与其他通道设置冲突。" }
+                connected.setPortForwardingL("127.0.0.1", ZAKO_LOCAL_PORT, "127.0.0.1", 1990)
+                zakoForwardPort = ZAKO_LOCAL_PORT
+            }
             phase = "检查目标页面"
             check(activePagesReady()) { "目标页面未响应。" }
             val state = TunnelState(
@@ -126,11 +135,12 @@ class TunnelService : Service() {
                 connecting = false,
                 apiActive = apiForwardPort != null,
                 astrBotActive = astrBotForwardPort != null,
-                message = when {
-                    apiForwardPort != null && astrBotForwardPort != null -> "API 与 AstrBot 通道运行中"
-                    apiForwardPort != null -> "反代 API 通道运行中"
-                    else -> "AstrBot 通道运行中"
-                }
+                zakoActive = zakoForwardPort != null,
+                message = listOfNotNull(
+                    "API".takeIf { apiForwardPort != null },
+                    "AstrBot".takeIf { astrBotForwardPort != null },
+                    "Zako".takeIf { zakoForwardPort != null }
+                ).joinToString("、") + " 通道运行中"
             )
             publish(state)
         } catch (error: Exception) {
@@ -158,6 +168,7 @@ class TunnelService : Service() {
         connectionSignature = ""
         apiForwardPort = null
         astrBotForwardPort = null
+        zakoForwardPort = null
     }
 
     private fun refreshConnectionState() {
@@ -172,7 +183,8 @@ class TunnelService : Service() {
 
     private fun activePagesReady(): Boolean =
         (apiForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
-            (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true)
+            (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
+            (zakoForwardPort?.let { tunnelHttpReady(it) } ?: true)
 
     private fun publish(state: TunnelState) = synchronized(sessionLock) {
         if (!destroyed) {
@@ -220,11 +232,13 @@ class TunnelService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(content))
     }
 
-    private enum class Target { API, ASTRBOT }
+    private enum class Target { API, ASTRBOT, ZAKO }
 
     companion object {
         const val ACTION_START_API = "cn.zzmllk.amadeus.START_API"
         const val ACTION_START_ASTRBOT = "cn.zzmllk.amadeus.START_ASTRBOT"
+        const val ZAKO_LOCAL_PORT = 11990
+        const val ACTION_START_ZAKO = "cn.zzmllk.amadeus.START_ZAKO"
         const val ACTION_STOP_ALL = "cn.zzmllk.amadeus.STOP_ALL"
         const val EXTRA_FORCE_RECONNECT = "force_reconnect"
         const val EXTRA_REQUEST_ID = "request_id"

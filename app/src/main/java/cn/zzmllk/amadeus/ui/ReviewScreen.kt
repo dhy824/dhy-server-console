@@ -19,6 +19,7 @@ fun ReviewSection(otherBusy: Boolean, onOpen: () -> Unit, model: ReviewViewModel
     val batches by model.batches.collectAsState()
     val busy by model.busy.collectAsState()
     val message by model.message.collectAsState()
+    LaunchedEffect(Unit) { model.refresh() }
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             GlassCard {
                 Icon(Icons.Rounded.CheckCircle, null, tint = GoogleBlue, modifier = Modifier.size(30.dp))
