@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                             Intent(this, WebConsoleActivity::class.java)
                                 .putExtra(WebConsoleActivity.EXTRA_TITLE, request.title)
                                 .putExtra(WebConsoleActivity.EXTRA_URL, request.url)
+                                .putExtra(WebConsoleActivity.EXTRA_TUNNEL_ACTION, request.tunnelAction)
                         )
                     }
                 )

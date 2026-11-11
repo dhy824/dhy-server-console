@@ -38,9 +38,9 @@ const val REVIEW_ROUTE = "/#/plugin-page/astrbot_plugin_identity_guard/review"
 
 const val DISTILLATION_ROUTE = "/#/plugin-page/astrbot_plugin_identity_guard/analysis"
 
-enum class ConsoleTarget { API, ASTRBOT }
+enum class ConsoleTarget { API, ASTRBOT, ZAKO }
 
-data class ConsoleRequest(val title: String, val url: String)
+data class ConsoleRequest(val title: String, val url: String, val tunnelAction: String)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val configStore = ConfigStore(application)
@@ -163,6 +163,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val action = when (target) {
                     ConsoleTarget.API -> TunnelService.ACTION_START_API
                     ConsoleTarget.ASTRBOT -> TunnelService.ACTION_START_ASTRBOT
+                    ConsoleTarget.ZAKO -> TunnelService.ACTION_START_ZAKO
                 }
                 ContextCompat.startForegroundService(
                     getApplication(),
@@ -174,17 +175,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         state.requestId == requestId && !state.connecting && (state.error != null || when (target) {
                             ConsoleTarget.API -> state.apiActive
                             ConsoleTarget.ASTRBOT -> state.astrBotActive
+                            ConsoleTarget.ZAKO -> state.zakoActive
                         })
                     }.error?.let { error(it) }
                 }
                 val request = when (target) {
                     ConsoleTarget.API -> ConsoleRequest(
                         "反代 API 管理",
-                        "http://127.0.0.1:${config.value.apiLocalPort}/management.html"
+                        "http://127.0.0.1:${config.value.apiLocalPort}/management.html", action
                     )
                     ConsoleTarget.ASTRBOT -> ConsoleRequest(
                         if (review) "AstrBot 审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
-                        "http://127.0.0.1:${config.value.astrBotLocalPort}" + if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""
+                        "http://127.0.0.1:${config.value.astrBotLocalPort}" + (if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""), action
+                    )
+                    ConsoleTarget.ZAKO -> ConsoleRequest(
+                        "Zako WebUI", "http://127.0.0.1:${TunnelService.ZAKO_LOCAL_PORT}/", action
                     )
                 }
                 mutableOpenConsole.emit(request)

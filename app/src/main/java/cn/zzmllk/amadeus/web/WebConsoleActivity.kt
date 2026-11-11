@@ -179,11 +179,9 @@ class WebConsoleActivity : ComponentActivity() {
 
     private fun openInExternalBrowser(url: String) {
         if (externalBrowserOpening) return
-        val tunnelAction = if (intent.getStringExtra(EXTRA_TITLE).orEmpty().contains("AstrBot", ignoreCase = true)) {
-            TunnelService.ACTION_START_ASTRBOT
-        } else {
-            TunnelService.ACTION_START_API
-        }
+        val tunnelAction = intent.getStringExtra(EXTRA_TUNNEL_ACTION)
+            ?.takeIf { it in setOf(TunnelService.ACTION_START_API, TunnelService.ACTION_START_ASTRBOT, TunnelService.ACTION_START_ZAKO) }
+            ?: return
         lifecycleScope.launch {
             externalBrowserOpening = true
             Toast.makeText(this@WebConsoleActivity, "正在确认浏览器通道……", Toast.LENGTH_SHORT).show()
@@ -261,5 +259,6 @@ class WebConsoleActivity : ComponentActivity() {
         private const val HTTP_PROBE_TIMEOUT_MS = 1_500
         const val EXTRA_TITLE = "title"
         const val EXTRA_URL = "url"
+        const val EXTRA_TUNNEL_ACTION = "tunnel_action"
     }
 }

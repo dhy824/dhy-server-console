@@ -215,6 +215,7 @@ fun AmadeusApp(
                                     busy = busy,
                                     onOpenApi = { viewModel.open(ConsoleTarget.API) },
                                     onOpenAstrBot = { viewModel.open(ConsoleTarget.ASTRBOT) },
+                                    onOpenZako = { viewModel.open(ConsoleTarget.ZAKO) },
                                     onOpenDistillation = { viewModel.open(ConsoleTarget.ASTRBOT, analysis = true) },
                                     onOpenReview = { viewModel.open(ConsoleTarget.ASTRBOT, review = true) },
                                     onSpeed = { confirmSpeed = true },
@@ -372,10 +373,10 @@ private fun AppHeader(
             Text("Amadeus", style = MaterialTheme.typography.bodySmall, color = MutedInk)
         }
         StatusBadge(
-            active = tunnel.apiActive || tunnel.astrBotActive,
+            active = tunnel.apiActive || tunnel.astrBotActive || tunnel.zakoActive,
             text = when {
                 busy || tunnel.connecting -> "处理中"
-                tunnel.apiActive || tunnel.astrBotActive -> "通道运行中"
+                tunnel.apiActive || tunnel.astrBotActive || tunnel.zakoActive -> "通道运行中"
                 else -> "待机"
             }
         )
@@ -390,6 +391,7 @@ private fun DashboardScreen(
     busy: Boolean,
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
+    onOpenZako: () -> Unit,
     onOpenDistillation: () -> Unit,
     onOpenReview: () -> Unit,
     onSpeed: () -> Unit,
@@ -443,6 +445,16 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenDistillation
         )
+        ActionCard(
+            icon = Icons.Rounded.Dashboard,
+            eyebrow = "ZAKO",
+            title = "Zako WebUI",
+            description = "通过 SSH 安全通道打开 Zako 管理页面。",
+            active = tunnel.zakoActive,
+            buttonText = "打开 Zako WebUI",
+            enabled = !busy,
+            onClick = onOpenZako
+        )
         ReviewSection(otherBusy = busy, onOpen = onOpenReview)
         GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -470,7 +482,7 @@ private fun DashboardScreen(
                 Text(if (config.host.isBlank()) "尚未配置服务器" else "已配置 SSH 连接参数", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("设置") }
             }
-            if (tunnel.apiActive || tunnel.astrBotActive) {
+            if (tunnel.apiActive || tunnel.astrBotActive || tunnel.zakoActive) {
                 Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = Hairline)
                 Spacer(Modifier.height(12.dp))
