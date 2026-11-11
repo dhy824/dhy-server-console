@@ -446,7 +446,7 @@ private fun DashboardScreen(
             onClick = onOpenDistillation
         )
         ActionCard(
-            icon = Icons.Rounded.Dashboard,
+            icon = Icons.Rounded.Security,
             eyebrow = "ZAKO",
             title = "Zako WebUI",
             description = "通过 SSH 安全通道打开 Zako 管理页面。",
@@ -789,3 +789,4 @@ private fun StatusBadge(active: Boolean, text: String) {
         }
     }
 }
+

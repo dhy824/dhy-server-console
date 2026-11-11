@@ -1,6 +1,6 @@
-# 2026-11-11 Zako WebUI 安卓入口 1.4.8（构建通过，未发布）
+# 2026-11-11 Zako WebUI 安卓入口 1.4.9（构建通过，未发布）
 
-当前维护源码1.4.8/versionCode23。总览新增 Zako WebUI 按钮，复用现有 SSH 会话，以本机 11990 转发到服务器回环 127.0.0.1:1990；应用内 WebView 和系统浏览器均沿同一入口，并携带明确隧道动作，保留既有重连、页面探测、登录 Cookie、主机校验和密钥处理。未改服务器，未读取签名/密钥正文，已完成本地Release构建，未安装或发布。
+当前维护源码1.4.8/versionCode24。总览新增 Zako WebUI 按钮，复用现有 SSH 会话，以本机 11990 转发到服务器回环 127.0.0.1:1990；应用内 WebView 和系统浏览器均沿同一入口，并携带明确隧道动作，保留既有重连、页面探测、登录 Cookie、主机校验和密钥处理。修复Zako通道健康探测改用/health并延长探测时间，Zako卡片图标改为安全管理图标。未改服务器，未读取签名/密钥正文，已完成本地Release构建，未安装或发布。
 
 ﻿# 2026-10-22 审核中心自动刷新适配 1.4.7（已正式发布）
 
@@ -142,3 +142,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 自身 MIT；Compose/AndroidX/Haze 为 Apache 2.0，JSch 为 BSD 3-Clause，Bouncy Castle 为 MIT，详见 LICENSE/licenses 与各发行包。项目由 AI 辅助维护并接受人工审核。
 
 不新增公网管理端口；不公开真实服务器地址、用户名、私钥路径、订阅凭据与日志。构建日志仅在本机留存，分享前脱敏。
+
