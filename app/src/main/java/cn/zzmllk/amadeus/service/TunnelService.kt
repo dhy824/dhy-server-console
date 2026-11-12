@@ -195,7 +195,10 @@ class TunnelService : Service() {
             }
             val localPort = zakoForwardPort ?: error("Zako 本地转发未返回端口。")
             phase = "检查 Zako 本地转发"
-            check(waitForZakoPage(localPort)) { "Zako 本地转发已建立，但网页未响应。" }
+            check(waitForZakoPage(localPort)) {
+                zakoForwarder?.lastErrorType?.let { "Zako SSH 直连通道失败（$it）。" }
+                    ?: "Zako 本地转发已建立，但网页未响应。"
+            }
             publish(TunnelState(
                 requestId = requestId,
                 apiActive = apiForwardPort != null,
@@ -210,7 +213,7 @@ class TunnelService : Service() {
             val message = when (error.message) {
                 "尚未导入 SSH 私钥。", "尚未信任服务器主机密钥，请先在设置中测试连接。",
                 "Zako 本地转发已建立，但网页未响应。" -> error.message!!
-                else -> tunnelFailure(error, phase)
+                else -> error.message?.takeIf { it.startsWith("Zako SSH 直连通道失败（") } ?: tunnelFailure(error, phase)
             }
             publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
         }

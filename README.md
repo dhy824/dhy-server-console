@@ -1,6 +1,6 @@
-# 2026-11-12 Zako 动态本地转发修复与首页审核入口 1.4.16（已正式发布）
+# 2026-11-12 Zako 动态本地转发修复与首页审核入口 1.4.17（构建中）
 
-当前维护源码1.4.16/versionCode31。Release/Lint/JVM、Public默认值和原签名连续性检查通过，Release/Lint/JVM、Public默认值和原签名连续性检查通过，APK SHA-256为`602020b534e88fd5e3a98cf3315a14030ca6d8afd4236950e9b6e7ab957c0af5`，GitHub Actions 43245236431成功，实际下载APK摘要与本地一致。本版本改用应用自有本地 ServerSocket 和 SSH direct-tcpip 通道，绕开 JSch PortWatcher。，实际下载APK摘要与本地一致。Zako独立启动流程改为由SSH分配临时本机端口，建立后从同一进程直接探测根页面，再把实际端口传给WebView；本次进一步改用Android直接Socket探测，避开Proxy.NO_PROXY兼容差异，避免固定11990端口冲突或转发尚未就绪导致ERR_CONNECTION_RESET；系统浏览器入口也等待本次SSH隧道状态。首页审核入口仅显示“打开审核中心”按钮，不查询或展示审核批次条目，底栏保留原五项。服务器未改，真机安装与网络交互待验证。
+当前维护源码1.4.17/versionCode32。Release/Lint/JVM、Public默认值和原签名连续性检查通过，Release/Lint/JVM、Public默认值和原签名连续性检查通过，APK SHA-256为`602020b534e88fd5e3a98cf3315a14030ca6d8afd4236950e9b6e7ab957c0af5`，GitHub Actions 43245236431成功，实际下载APK摘要与本地一致。本版本改为手动双向泵流，并在失败时显示 SSH 直连通道错误类型。，实际下载APK摘要与本地一致。Zako独立启动流程改为由SSH分配临时本机端口，建立后从同一进程直接探测根页面，再把实际端口传给WebView；本次进一步改用Android直接Socket探测，避开Proxy.NO_PROXY兼容差异，避免固定11990端口冲突或转发尚未就绪导致ERR_CONNECTION_RESET；系统浏览器入口也等待本次SSH隧道状态。首页审核入口仅显示“打开审核中心”按钮，不查询或展示审核批次条目，底栏保留原五项。服务器未改，真机安装与网络交互待验证。
 
 # 2026-10-22 审核中心自动刷新适配 1.4.7（已正式发布）
 

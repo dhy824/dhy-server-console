@@ -6,6 +6,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,6 +26,7 @@ class LocalSshForwarder(
     })
     private val listener = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
     @Volatile private var closed = false
+    @Volatile var lastErrorType: String? = null
 
     val localPort: Int get() = listener.localPort
 
@@ -48,24 +50,42 @@ class LocalSshForwarder(
 
     private fun bridge(client: Socket) {
         var channel: ChannelDirectTCPIP? = null
+        var upstream: Future<*>? = null
+        var downstream: Future<*>? = null
         try {
             client.tcpNoDelay = true
             channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-            channel.setInputStream(client.getInputStream())
-            channel.setOutputStream(client.getOutputStream())
             channel.setHost(remoteHost)
             channel.setPort(remotePort)
             channel.setOrgIPAddress(client.inetAddress.hostAddress ?: "127.0.0.1")
             channel.setOrgPort(client.port)
             channel.connect(10_000)
-            while (!closed && !client.isClosed && !channel.isClosed) {
+            val clientInput = client.getInputStream()
+            val clientOutput = client.getOutputStream()
+            val channelInput = channel.inputStream
+            val channelOutput = channel.outputStream
+            upstream = workers.submit { copy(clientInput, channelOutput) }
+            downstream = workers.submit { copy(channelInput, clientOutput) }
+            while (!closed && !client.isClosed && !channel.isClosed && !upstream.isDone && !downstream.isDone) {
                 Thread.sleep(100)
             }
-        } catch (_: Exception) {
-            // The client receives a reset when the SSH direct-tcpip channel is refused.
+        } catch (error: Exception) {
+            lastErrorType = error.javaClass.simpleName.take(48)
         } finally {
+            upstream?.cancel(true)
+            downstream?.cancel(true)
             try { channel?.disconnect() } catch (_: Exception) { }
             try { client.close() } catch (_: Exception) { }
+        }
+    }
+
+    private fun copy(input: java.io.InputStream, output: java.io.OutputStream) {
+        val buffer = ByteArray(16 * 1024)
+        while (!closed) {
+            val count = input.read(buffer)
+            if (count < 0) return
+            output.write(buffer, 0, count)
+            output.flush()
         }
     }
 
