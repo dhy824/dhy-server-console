@@ -1,6 +1,5 @@
 package cn.zzmllk.amadeus.ssh
 
-import java.net.Proxy
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Locale
@@ -12,7 +11,11 @@ fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): 
     if (!path.startsWith("/") || path.contains("..") || path.any { it.isISOControl() || it == '\\' }) return false
     var socket: Socket? = null
     return try {
-        socket = Socket(Proxy.NO_PROXY)
+        // Android's direct Socket constructor is more reliable for loopback probes than
+        // constructing a Socket with Proxy.NO_PROXY; the latter can fail before the JSch
+        // PortWatcher receives the connection on some Android network stacks.
+        socket = Socket()
+        socket.tcpNoDelay = true
         socket.soTimeout = timeoutMillis
         socket.connect(InetSocketAddress("127.0.0.1", port), timeoutMillis)
         val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
