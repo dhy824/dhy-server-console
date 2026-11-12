@@ -129,7 +129,7 @@ class TunnelService : Service() {
                 zakoForwardPort = ZAKO_LOCAL_PORT
             }
             phase = "检查目标页面"
-            check(activePagesReady()) { "目标页面未响应。" }
+            check(waitForActivePages()) { "目标页面未响应。" }
             val state = TunnelState(
                 requestId = requestId,
                 connecting = false,
@@ -185,6 +185,14 @@ class TunnelService : Service() {
         (apiForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
             (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
             (zakoForwardPort?.let { tunnelHttpReady(it, "/health", 5_000) } ?: true)
+
+    private fun waitForActivePages(): Boolean {
+        repeat(3) { attempt ->
+            if (activePagesReady()) return true
+            if (attempt < 2) Thread.sleep(750)
+        }
+        return false
+    }
 
     private fun publish(state: TunnelState) = synchronized(sessionLock) {
         if (!destroyed) {
@@ -246,4 +254,3 @@ class TunnelService : Service() {
         private const val NOTIFICATION_ID = 8317
     }
 }
-

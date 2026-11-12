@@ -28,6 +28,10 @@ class TunnelHealthTest {
         assertTrue(probe(302)) // Redirects are not followed beyond loopback.
     }
 
+    @Test fun informationalResponsesAreNotTreatedAsReady() {
+        assertFalse(probe(100))
+    }
+
     @Test fun listeningWithoutAResponseIsNotAWorkingTunnel() {
         assertFalse(probe(0))
         assertFalse(probe(503))

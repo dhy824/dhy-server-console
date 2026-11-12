@@ -1,26 +1,32 @@
 package cn.zzmllk.amadeus.ssh
 
-import java.net.HttpURLConnection
 import java.net.Proxy
-import java.net.URL
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.Locale
 import cn.zzmllk.amadeus.data.IdentityKeyException
 
-/** Probe fixed loopback HTTP services; no credentials, redirects, body reads or system proxy. */
+/** Probe fixed loopback HTTP services without Android proxy or cleartext-policy mediation. */
 fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): Boolean {
     if (port !in 1024..65535) return false
     if (!path.startsWith("/") || path.contains("..") || path.any { it.isISOControl() || it == '\\' }) return false
-    var connection: HttpURLConnection? = null
+    var socket: Socket? = null
     return try {
-        connection = URL("http://127.0.0.1:$port$path").openConnection(Proxy.NO_PROXY) as HttpURLConnection
-        connection.connectTimeout = timeoutMillis
-        connection.readTimeout = timeoutMillis
-        connection.instanceFollowRedirects = false
-        connection.responseCode in 200..499
+        socket = Socket(Proxy.NO_PROXY)
+        socket.soTimeout = timeoutMillis
+        socket.connect(InetSocketAddress("127.0.0.1", port), timeoutMillis)
+        val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+        socket.getOutputStream().apply {
+            write(request.toByteArray(Charsets.US_ASCII))
+            flush()
+        }
+        val statusLine = socket.getInputStream().bufferedReader(Charsets.ISO_8859_1).readLine()
+        val status = statusLine?.split(" ", limit = 3)?.getOrNull(1)?.toIntOrNull()
+        status in 200..499
     } catch (_: Exception) {
         false
     } finally {
-        connection?.disconnect()
+        try { socket?.close() } catch (_: Exception) { }
     }
 }
 
@@ -44,4 +50,3 @@ fun tunnelFailure(error: Exception, phase: String): String {
     val type = chain.last().javaClass.simpleName.replace(Regex("[^A-Za-z0-9_]"), "").take(48).ifBlank { "Exception" }
     return "$phase：$detail（$type）"
 }
-

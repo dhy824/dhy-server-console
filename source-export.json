@@ -3,6 +3,7 @@
   "files": {
     ".github/workflows/publish-release-v1.4.0.yml": "aba30c39036fa2d503b5b7a9e705f233191c66363e54bac75aa6092766f99f77",
     ".github/workflows/publish-release-v1.4.1.yml": "999f9e24329e0efe6a37a42672b4f7e541d9e4a04d46909570ebaa39fc74b477",
+    ".github/workflows/publish-release-v1.4.10.yml": "42b689486d59861ebca7f08b6992a4c33d41cabadab64086ba8081ee02efbc24",
     ".github/workflows/publish-release-v1.4.2.yml": "8872f3a1383da3914441d09e5e6eac50ae5508bcd486bb8fb6f92e16caf3a37c",
     ".github/workflows/publish-release-v1.4.3.yml": "b0dd139cf63ba7ecfddd4f6d65fd09253c8a4e79bcfc08592b32ddf6bf27c381",
     ".github/workflows/publish-release-v1.4.4.yml": "52fb230708e830884f889d54223093fb661694067ff27e6f82257c7b95af8102",
@@ -11,9 +12,9 @@
     ".gitignore": "0d3fa74fbb917dbe65b47da9728b48852e67f37782de69d0f34a25812905e9e5",
     "Build-State.ps1": "a50a183f1a1a205256368cd3ee638abfd3b48bd3efabb44c33ea42b6debfd9e1",
     "LICENSE": "05ec8487cc56ab248184a3e72af1e5a4ce88c23360f57e4ca4e8c0bcfd329349",
-    "README.md": "6e0591711e889e516ad513cd5988dadf251f5c007b34b9f9d6b43a60ccfa6256",
+    "README.md": "b498fe8f3d37017d3f6cb1e99d44d73264008ea1c829517c920c60ca887afdf6",
     "Test-Apk.ps1": "feb6927ccfbd6f6c90bd8ab2412eecebddaa16f2dd6f82a2b5bd9176ed3657cb",
-    "app/build.gradle.kts": "565ce3a8431b7f3d1eb639678fa2c76906aa219956bfe5e6b8dc2eb04c9dd3e6",
+    "app/build.gradle.kts": "ae7ba998b3717120af5fe0c4b30dbf36989f7cbfbcf85f28390a6fa60a8ef345",
     "app/proguard-rules.pro": "55be3d8554f3ddc9b1cf3f780a72d70fd315d185e8c71c2a164e739c3188dc20",
     "app/src/main/AndroidManifest.xml": "704f3bbc42593ac1dc977c21d47d67dc251c9b2e9a074b13529cec8543c2ba9a",
     "app/src/main/assets/update_probe.py": "15d91f0c1f6077f2abd075dd85d476beb103e72ef1a5612f15bbbf0bc79890a1",
@@ -23,12 +24,12 @@
     "app/src/main/java/cn/zzmllk/amadeus/data/SecureKeyStore.kt": "2a82a063b1d70816bd1db0de64d806f4599253d86b114c893a629537388abb96",
     "app/src/main/java/cn/zzmllk/amadeus/data/StoredIdentity.kt": "22e400a993ef8bc4ca79204fe5cc1ed254de55fd37f1516cb941ed3449c8b630",
     "app/src/main/java/cn/zzmllk/amadeus/review/ReviewViewModel.kt": "14da4d7504fdd405b56b6210c6e7927a1e773289ed4e67944a03ac5c0f7948f6",
-    "app/src/main/java/cn/zzmllk/amadeus/service/TunnelService.kt": "38cba53439eb534c47e92c4da1d80158f6ad6326d30fbf33feb19fc18d813544",
+    "app/src/main/java/cn/zzmllk/amadeus/service/TunnelService.kt": "a7ed58e977a83100dd28acedf1373e4357944d5650696313e282cb33ffc42e9a",
     "app/src/main/java/cn/zzmllk/amadeus/ssh/BoundedOutput.kt": "dfc6ec5a67c0e6294c8fc7909336ddb2897c3cc3775e89f01808011e830810c8",
     "app/src/main/java/cn/zzmllk/amadeus/ssh/ConnectionIdentity.kt": "e49e90683f2f045e9cf949c2127494afb5ad5ee65441c0a7ef96cb2bb5cf1085",
     "app/src/main/java/cn/zzmllk/amadeus/ssh/SshEngine.kt": "270e82f545453b270532f6746f0b8e49569eacf3b8b039247a8c03ff6cf3caa3",
-    "app/src/main/java/cn/zzmllk/amadeus/ssh/TunnelHealth.kt": "9228c4aed502a2dd4a6ef4e5fdf76b87b4e6b3308c2ec572a37ed5d0f9598f6a",
-    "app/src/main/java/cn/zzmllk/amadeus/ui/AmadeusApp.kt": "fed328f5a4b1385074a8b762ab9714ba1c3cc79de2425bac3d1ad10319c0c546",
+    "app/src/main/java/cn/zzmllk/amadeus/ssh/TunnelHealth.kt": "2d7441d093f61bd61376117562b6d893c1862284d7c6c8d8b80dea3c3b55c5bf",
+    "app/src/main/java/cn/zzmllk/amadeus/ui/AmadeusApp.kt": "869f94c854e957a39b09407309d1f75baaa17743540281c5f00667fa79836b22",
     "app/src/main/java/cn/zzmllk/amadeus/ui/ReviewScreen.kt": "722492dcabd4e5e347e2183e0fdcb0ee13bd416f77bf11d799157c25377a3b66",
     "app/src/main/java/cn/zzmllk/amadeus/ui/SubscriptionScreen.kt": "3fe5028b90820926dc3dd6b7b2e77e39e37ba463484b1b31665de22361693728",
     "app/src/main/java/cn/zzmllk/amadeus/ui/SystemBars.kt": "cf28cedb53e2c6739c06c74101b2eceff5f4d11b27481c65deec069417d27d40",
@@ -51,7 +52,7 @@
     "app/src/main/res/xml/network_security_config.xml": "9187f485f22fde712aea8de5243664710440a9ee08e9f1b172978eef96a15001",
     "app/src/test/java/cn/zzmllk/amadeus/data/StoredIdentityTest.kt": "a9415fd7c9eae9dd8839ffcd70ce2f69905e9882e74171fd32fa01a9abde8306",
     "app/src/test/java/cn/zzmllk/amadeus/ssh/ConnectionContractsTest.kt": "ff96babebcd4a2dbcb4e1bc4e3d641dd77e0f3dd5c76115a89f23209367839f7",
-    "app/src/test/java/cn/zzmllk/amadeus/ssh/TunnelHealthTest.kt": "e2c00214fc7a58b7ade40692a55d837028103d1d04944c399f21a39c7a4ea15c",
+    "app/src/test/java/cn/zzmllk/amadeus/ssh/TunnelHealthTest.kt": "afe5f02a312741c51d042f500629ab9d02c4195a70d2de5e9c4d6fe4c64f424b",
     "app/src/test/java/cn/zzmllk/amadeus/updates/UpdateProtocolTest.kt": "2b6d419a053c60f1fe538db6daeefa561e3249dbd827e95fac92382ce474867d",
     "build-debug.ps1": "625de89e6c5e6c2ca2dc8a719be1c12bc412e5946948bfc661675db7678cf307",
     "build-release.ps1": "f7d59f75e3ecbab3a3edbc9c9de9c8a834582cc19c87ce82c232c1d7d285cb8d",
@@ -60,6 +61,6 @@
     "prepare-toolchain.ps1": "18922e9b96f86cd99eeef9e4fa2505069ab1bc2bf702380dda83d786f8160c9d",
     "settings.gradle.kts": "891bf40f38fef8b5ab785aaaa33fb7c017134b038c5df066a77fc08abeadce75",
     "tests/Test-Build-State.ps1": "db68abcab33ce33f23adca2dea6ef4b6ccece07253db9cc02b89abb4825d18a6",
-    "使用说明.md": "1a00185e40786c40d218a239cd54dd01a41528de300f042a1dff35bdab8dd714"
+    "使用说明.md": "c8d7c76eb047bbc17971d1e855c5351ec8b116959efaa8773b9ab5c0182e3d87"
   }
 }

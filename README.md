@@ -1,8 +1,8 @@
-# 2026-11-12 Zako WebUI 安卓入口 1.4.9（已正式发布）
+# 2026-11-12 Zako WebUI 隧道探测修复 1.4.10（已正式发布）
 
-当前维护源码1.4.9/versionCode24。总览新增 Zako WebUI 按钮，复用现有 SSH 会话，以本机 11990 转发到服务器回环 127.0.0.1:1990；应用内 WebView 和系统浏览器均沿同一入口，并携带明确隧道动作，保留既有重连、页面探测、登录 Cookie、主机校验和密钥处理。修复Zako通道健康探测改用 /health 并延长探测时间，Zako卡片图标改为安全管理图标。Public Release `v1.4.9` 已发布，APK SHA-256 为 `b5dd544a5a852df2cf041c8dc5f98137e107383896ee07f1e042acc8b2d07435`。Release、Lint、JVM 构建通过，未改服务器配置，未上传签名文件、私钥或本地连接配置。真机安装与手机网络交互仍待验证。
+当前维护源码1.4.10/versionCode25。修复 Android Zako 隧道探测改用直接回环 TCP/HTTP 请求，绕开系统代理和本地明文 HTTP 差异，并在建立转发后做有界重试。Zako卡片图标保持安全管理图标。Release、Lint、JVM测试和APK空默认值、签名连续性验收通过。GitHub Release `v1.4.10` 已发布，APK SHA-256 为 `cb49b2adf03337d4b057c7969f856578a5c91889250f47b6426f7a0c95b22fa7`。服务器配置、SSH密钥和本地连接配置未改，手机真机验证仍待完成。
 
- 审核中心自动刷新适配 1.4.7（已正式发布）
+# 2026-10-22 审核中心自动刷新适配 1.4.7（已正式发布）
 
 当前维护源码1.4.7/versionCode22。审核模块已移到首页“总览”，进入总览时自动刷新服务器批次，仍可手动刷新；底栏恢复总览/终端/订阅/更新/设置五项；刷新审核批次与打开审核中心按钮各至少48dp、间距14dp，旧审核页号恢复为总览。审核在原SSH/Dashboard中完成，服务器需配套1.28.13修复继续审核后列表未隐藏的问题；此网页修复也适用于Windows，无需Windows改版。系统浏览器打开审核时继续识别AstrBot通道。
 
@@ -142,4 +142,3 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File release-public-apk.ps1
 自身 MIT；Compose/AndroidX/Haze 为 Apache 2.0，JSch 为 BSD 3-Clause，Bouncy Castle 为 MIT，详见 LICENSE/licenses 与各发行包。项目由 AI 辅助维护并接受人工审核。
 
 不新增公网管理端口；不公开真实服务器地址、用户名、私钥路径、订阅凭据与日志。构建日志仅在本机留存，分享前脱敏。
-
