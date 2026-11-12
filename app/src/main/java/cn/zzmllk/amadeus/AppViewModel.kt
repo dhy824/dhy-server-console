@@ -170,15 +170,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     Intent(getApplication(), TunnelService::class.java).setAction(action)
                         .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
                 )
-                withTimeout(35_000) {
+                val tunnelState = withTimeout(35_000) {
                     TunnelRuntime.state.first { state ->
                         state.requestId == requestId && !state.connecting && (state.error != null || when (target) {
                             ConsoleTarget.API -> state.apiActive
                             ConsoleTarget.ASTRBOT -> state.astrBotActive
                             ConsoleTarget.ZAKO -> state.zakoActive
                         })
-                    }.error?.let { error(it) }
+                    }
                 }
+                tunnelState.error?.let { error(it) }
                 val request = when (target) {
                     ConsoleTarget.API -> ConsoleRequest(
                         "反代 API 管理",
@@ -189,7 +190,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         "http://127.0.0.1:${config.value.astrBotLocalPort}" + (if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""), action
                     )
                     ConsoleTarget.ZAKO -> ConsoleRequest(
-                        "Zako WebUI", "http://127.0.0.1:${TunnelService.ZAKO_LOCAL_PORT}/", action
+                        "Zako WebUI",
+                        "http://127.0.0.1:${tunnelState.zakoLocalPort ?: error("Zako 本地端口未建立。")}/",
+                        action
                     )
                 }
                 mutableOpenConsole.emit(request)

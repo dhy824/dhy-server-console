@@ -28,6 +28,7 @@ data class TunnelState(
     val apiActive: Boolean = false,
     val astrBotActive: Boolean = false,
     val zakoActive: Boolean = false,
+    val zakoLocalPort: Int? = null,
     val message: String = "隧道未启动",
     val error: String? = null,
     val requestId: String = ""
@@ -168,9 +169,9 @@ class TunnelService : Service() {
             val config = configStore.current()
             check(keyStore.hasKey) { "尚未导入 SSH 私钥。" }
             check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
-            check(config.apiLocalPort != ZAKO_LOCAL_PORT && config.astrBotLocalPort != ZAKO_LOCAL_PORT) { "Zako 本地端口与其他通道设置冲突。" }
             val signature = connectionIdentity(config, keyStore.revision)
-            val canReuse = !forceReconnect && session?.isConnected == true && signature == connectionSignature
+            val canReuse = !forceReconnect && session?.isConnected == true && signature == connectionSignature &&
+                zakoForwardPort?.let { tunnelHttpReady(it, "/", ZAKO_PROBE_TIMEOUT_MS) } == true
             if (!canReuse) {
                 disconnectSession()
                 phase = "读取手机中的 SSH 私钥"
@@ -186,14 +187,19 @@ class TunnelService : Service() {
             phase = "建立 Zako 本地转发"
             val connected = session ?: error("SSH 会话未建立。")
             if (zakoForwardPort == null) {
-                connected.setPortForwardingL("127.0.0.1", ZAKO_LOCAL_PORT, "127.0.0.1", 1990)
-                zakoForwardPort = ZAKO_LOCAL_PORT
+                // Do not reserve a well-known port on the phone. Other local apps and stale
+                // forwarding threads can occupy it even though SSH authentication succeeded.
+                zakoForwardPort = connected.setPortForwardingL("127.0.0.1", 0, "127.0.0.1", 1990)
             }
+            val localPort = zakoForwardPort ?: error("Zako 本地转发未返回端口。")
+            phase = "检查 Zako 本地转发"
+            check(waitForZakoPage(localPort)) { "Zako 本地转发已建立，但网页未响应。" }
             publish(TunnelState(
                 requestId = requestId,
                 apiActive = apiForwardPort != null,
                 astrBotActive = astrBotForwardPort != null,
                 zakoActive = true,
+                zakoLocalPort = localPort,
                 message = "Zako SSH 转发已建立"
             ))
         } catch (error: Exception) {
@@ -201,7 +207,7 @@ class TunnelService : Service() {
             if (destroyed) return
             val message = when (error.message) {
                 "尚未导入 SSH 私钥。", "尚未信任服务器主机密钥，请先在设置中测试连接。",
-                "Zako 本地端口与其他通道设置冲突。" -> error.message!!
+                "Zako 本地转发已建立，但网页未响应。" -> error.message!!
                 else -> tunnelFailure(error, phase)
             }
             publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
@@ -242,6 +248,14 @@ class TunnelService : Service() {
         repeat(3) { attempt ->
             if (activePagesReady()) return true
             if (attempt < 2) Thread.sleep(750)
+        }
+        return false
+    }
+
+    private fun waitForZakoPage(port: Int): Boolean {
+        repeat(ZAKO_PROBE_ATTEMPTS) { attempt ->
+            if (tunnelHttpReady(port, "/", ZAKO_PROBE_TIMEOUT_MS)) return true
+            if (attempt + 1 < ZAKO_PROBE_ATTEMPTS) Thread.sleep(ZAKO_PROBE_INTERVAL_MS)
         }
         return false
     }
@@ -302,6 +316,9 @@ class TunnelService : Service() {
         const val ACTION_STOP_ALL = "cn.zzmllk.amadeus.STOP_ALL"
         const val EXTRA_FORCE_RECONNECT = "force_reconnect"
         const val EXTRA_REQUEST_ID = "request_id"
+        private const val ZAKO_PROBE_TIMEOUT_MS = 1_500
+        private const val ZAKO_PROBE_INTERVAL_MS = 250L
+        private const val ZAKO_PROBE_ATTEMPTS = 8
         private const val CHANNEL_ID = "amadeus_tunnels"
         private const val NOTIFICATION_ID = 8317
     }
