@@ -14,6 +14,7 @@ import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.ssh.SshEngine
 import cn.zzmllk.amadeus.ssh.connectionIdentity
+import cn.zzmllk.amadeus.ssh.LocalSshForwarder
 import cn.zzmllk.amadeus.ssh.tunnelHttpReady
 import cn.zzmllk.amadeus.ssh.tunnelFailure
 import com.jcraft.jsch.Session
@@ -51,6 +52,7 @@ class TunnelService : Service() {
     private var apiForwardPort: Int? = null
     private var astrBotForwardPort: Int? = null
     private var zakoForwardPort: Int? = null
+    private var zakoForwarder: LocalSshForwarder? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -171,6 +173,7 @@ class TunnelService : Service() {
             check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
             val signature = connectionIdentity(config, keyStore.revision)
             val canReuse = !forceReconnect && session?.isConnected == true && signature == connectionSignature &&
+                zakoForwarder?.isOpen == true &&
                 zakoForwardPort?.let { tunnelHttpReady(it, "/", ZAKO_PROBE_TIMEOUT_MS) } == true
             if (!canReuse) {
                 disconnectSession()
@@ -186,10 +189,9 @@ class TunnelService : Service() {
             }
             phase = "建立 Zako 本地转发"
             val connected = session ?: error("SSH 会话未建立。")
-            if (zakoForwardPort == null) {
-                // Do not reserve a well-known port on the phone. Other local apps and stale
-                // forwarding threads can occupy it even though SSH authentication succeeded.
-                zakoForwardPort = connected.setPortForwardingL("127.0.0.1", 0, "127.0.0.1", 1990)
+            if (zakoForwarder == null) {
+                zakoForwarder = LocalSshForwarder(connected, "127.0.0.1", 1990)
+                zakoForwardPort = zakoForwarder?.localPort
             }
             val localPort = zakoForwardPort ?: error("Zako 本地转发未返回端口。")
             phase = "检查 Zako 本地转发"
@@ -222,6 +224,8 @@ class TunnelService : Service() {
     }
 
     private fun disconnectSession() = synchronized(sessionLock) {
+        try { zakoForwarder?.close() } catch (_: Exception) { }
+        zakoForwarder = null
         try { session?.disconnect() } catch (_: Exception) { }
         session = null
         connectionSignature = ""
