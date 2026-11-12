@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -435,6 +436,15 @@ private fun DashboardScreen(
                 }
             }
         }
+        FilledTonalButton(
+            onClick = onOpenReview,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        ) {
+            Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("打开审核中心")
+        }
         ActionCard(
             icon = Icons.Rounded.Dashboard,
             eyebrow = "蒸馏中心",
@@ -455,7 +465,6 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenZako
         )
-        ReviewSection(otherBusy = busy, onOpen = onOpenReview)
         GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -789,4 +798,3 @@ private fun StatusBadge(active: Boolean, text: String) {
         }
     }
 }
-

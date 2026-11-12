@@ -1,0 +1,12 @@
+{
+  "Package": "cn.zzmllk.amadeus",
+  "Sha256": "df69aadd17296d6202f51a2b16b9e14a9e13d678978210f741f1ada49dd4aac9",
+  "VersionCode": 28,
+  "ServerChanged": false,
+  "SignerContinuityVerified": true,
+  "Build": "Release/Lint/JVM passed",
+  "SecretsUploaded": false,
+  "Version": "1.4.13",
+  "SignatureVerified": true,
+  "PublicDefaultsVerified": true
+}

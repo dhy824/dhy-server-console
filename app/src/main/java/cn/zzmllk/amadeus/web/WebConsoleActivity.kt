@@ -50,14 +50,18 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import cn.zzmllk.amadeus.service.TunnelService
+import cn.zzmllk.amadeus.service.TunnelRuntime
 import cn.zzmllk.amadeus.ui.AmadeusTheme
 import cn.zzmllk.amadeus.ui.enableAmadeusEdgeToEdge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.flow.first
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.UUID
 
 class WebConsoleActivity : ComponentActivity() {
     private var externalBrowserOpening = false
@@ -186,13 +190,18 @@ class WebConsoleActivity : ComponentActivity() {
             externalBrowserOpening = true
             Toast.makeText(this@WebConsoleActivity, "正在确认浏览器通道……", Toast.LENGTH_SHORT).show()
             try {
-                requestTunnel(tunnelAction, forceReconnect = false)
-                var reachable = waitUntilReachable(url, NORMAL_PROBE_TIMEOUT_MS)
-                if (!reachable) {
-                    requestTunnel(tunnelAction, forceReconnect = true)
-                    reachable = waitUntilReachable(url, RECONNECT_PROBE_TIMEOUT_MS)
+                val requestId = UUID.randomUUID().toString()
+                requestTunnel(tunnelAction, forceReconnect = false, requestId = requestId)
+                if (tunnelAction != TunnelService.ACTION_START_ZAKO) {
+                    var reachable = waitUntilReachable(url, NORMAL_PROBE_TIMEOUT_MS)
+                    if (!reachable) {
+                        requestTunnel(tunnelAction, forceReconnect = true, requestId = UUID.randomUUID().toString())
+                        reachable = waitUntilReachable(url, RECONNECT_PROBE_TIMEOUT_MS)
+                    }
+                    check(reachable) { "local tunnel unavailable" }
+                } else {
+                    awaitZakoTunnel(requestId)
                 }
-                check(reachable) { "local tunnel unavailable" }
                 startActivity(
                     Intent(Intent.ACTION_VIEW, url.toUri())
                         .addCategory(Intent.CATEGORY_BROWSABLE)
@@ -209,13 +218,23 @@ class WebConsoleActivity : ComponentActivity() {
         }
     }
 
-    private fun requestTunnel(action: String, forceReconnect: Boolean) {
+    private fun requestTunnel(action: String, forceReconnect: Boolean, requestId: String) {
         ContextCompat.startForegroundService(
             this,
             Intent(this, TunnelService::class.java)
                 .setAction(action)
                 .putExtra(TunnelService.EXTRA_FORCE_RECONNECT, forceReconnect)
+                .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
         )
+    }
+
+    private suspend fun awaitZakoTunnel(requestId: String) {
+        withTimeout(35_000) {
+            val state = TunnelRuntime.state.first {
+                it.requestId == requestId && !it.connecting && (it.error != null || it.zakoActive)
+            }
+            state.error?.let { error(it) }
+        }
     }
 
     private suspend fun waitUntilReachable(url: String, timeoutMs: Long): Boolean = withContext(Dispatchers.IO) {

@@ -87,6 +87,10 @@ class TunnelService : Service() {
 
     private fun startTunnel(target: Target, forceReconnect: Boolean = false, requestId: String = "") {
         if (destroyed) return
+        if (target == Target.ZAKO) {
+            startZakoTunnel(forceReconnect, requestId)
+            return
+        }
         val previous = TunnelRuntime.state.value
         val restoreApi = previous.apiActive || apiForwardPort != null || target == Target.API
         val restoreAstrBot = previous.astrBotActive || astrBotForwardPort != null || target == Target.ASTRBOT
@@ -129,7 +133,7 @@ class TunnelService : Service() {
                 zakoForwardPort = ZAKO_LOCAL_PORT
             }
             phase = "检查目标页面"
-            check(waitForActivePages()) { "目标页面未响应。" }
+            if (target != Target.ZAKO) check(waitForActivePages()) { "目标页面未响应。" }
             val state = TunnelState(
                 requestId = requestId,
                 connecting = false,
@@ -149,6 +153,55 @@ class TunnelService : Service() {
             val message = when (error.message) {
                 "尚未导入 SSH 私钥。", "尚未信任服务器主机密钥，请先在设置中测试连接。" -> error.message!!
                 "目标页面未响应。" -> "SSH 已连接，但目标页面未响应；请检查服务器服务或网络后重新打开。"
+                else -> tunnelFailure(error, phase)
+            }
+            publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
+        }
+    }
+
+    private fun startZakoTunnel(forceReconnect: Boolean, requestId: String) {
+        if (destroyed) return
+        val previous = TunnelRuntime.state.value
+        publish(previous.copy(connecting = true, error = null, requestId = requestId, message = "正在建立 Zako SSH 转发……"))
+        var phase = "检查连接配置"
+        try {
+            val config = configStore.current()
+            check(keyStore.hasKey) { "尚未导入 SSH 私钥。" }
+            check(config.hasTrustedHost) { "尚未信任服务器主机密钥，请先在设置中测试连接。" }
+            check(config.apiLocalPort != ZAKO_LOCAL_PORT && config.astrBotLocalPort != ZAKO_LOCAL_PORT) { "Zako 本地端口与其他通道设置冲突。" }
+            val signature = connectionIdentity(config, keyStore.revision)
+            val canReuse = !forceReconnect && session?.isConnected == true && signature == connectionSignature
+            if (!canReuse) {
+                disconnectSession()
+                phase = "读取手机中的 SSH 私钥"
+                val privateKey = keyStore.read()
+                phase = "SSH 身份验证与主机校验"
+                val created = try { SshEngine.connect(config, privateKey) } finally { privateKey.fill(0) }
+                synchronized(sessionLock) {
+                    if (destroyed) { created.disconnect(); return }
+                    session = created
+                    connectionSignature = signature
+                }
+            }
+            phase = "建立 Zako 本地转发"
+            val connected = session ?: error("SSH 会话未建立。")
+            if (zakoForwardPort == null) {
+                connected.setPortForwardingL("127.0.0.1", ZAKO_LOCAL_PORT, "127.0.0.1", 1990)
+                zakoForwardPort = ZAKO_LOCAL_PORT
+            }
+            publish(TunnelState(
+                requestId = requestId,
+                apiActive = apiForwardPort != null,
+                astrBotActive = astrBotForwardPort != null,
+                zakoActive = true,
+                message = "Zako SSH 转发已建立"
+            ))
+        } catch (error: Exception) {
+            disconnectSession()
+            if (destroyed) return
+            val message = when (error.message) {
+                "尚未导入 SSH 私钥。", "尚未信任服务器主机密钥，请先在设置中测试连接。",
+                "Zako 本地端口与其他通道设置冲突。" -> error.message!!
                 else -> tunnelFailure(error, phase)
             }
             publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
@@ -183,8 +236,7 @@ class TunnelService : Service() {
 
     private fun activePagesReady(): Boolean =
         (apiForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
-            (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true) &&
-            (zakoForwardPort?.let { tunnelHttpReady(it, "/health", 5_000) } ?: true)
+            (astrBotForwardPort?.let { tunnelHttpReady(it) } ?: true)
 
     private fun waitForActivePages(): Boolean {
         repeat(3) { attempt ->
