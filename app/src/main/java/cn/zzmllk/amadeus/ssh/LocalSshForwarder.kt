@@ -59,11 +59,14 @@ class LocalSshForwarder(
             channel.setPort(remotePort)
             channel.setOrgIPAddress(client.inetAddress.hostAddress ?: "127.0.0.1")
             channel.setOrgPort(client.port)
-            channel.connect(10_000)
             val clientInput = client.getInputStream()
             val clientOutput = client.getOutputStream()
+            // JSch requires both channel streams to be initialized before connect().
+            // If connect() runs first, Android can receive a JSchException while the
+            // desktop JVM may only log the ordering warning and continue.
             val channelInput = channel.inputStream
             val channelOutput = channel.outputStream
+            channel.connect(10_000)
             upstream = workers.submit { copy(clientInput, channelOutput) }
             downstream = workers.submit { copy(channelInput, clientOutput) }
             while (!closed && !client.isClosed && !channel.isClosed && !upstream.isDone && !downstream.isDone) {

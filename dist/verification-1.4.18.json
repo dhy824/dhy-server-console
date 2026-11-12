@@ -1,0 +1,15 @@
+{
+  "version": "1.4.18",
+  "versionCode": 29,
+  "package": "cn.zzmllk.amadeus",
+  "apk": "dhy-server-console-1.4.18.apk",
+  "size": 1503257,
+  "sha256": "3cc559f20ba861f1361b10dbe6802775cc37706050cbd048925ff12a9f174a87",
+  "publicDefaultsVerified": true,
+  "signatureVerified": true,
+  "signerContinuityVerified": true,
+  "serverChanged": false,
+  "phoneRealDeviceVerified": false,
+  "localForward": "dynamic",
+  "reviewEntry": "homepage-button-only"
+}
