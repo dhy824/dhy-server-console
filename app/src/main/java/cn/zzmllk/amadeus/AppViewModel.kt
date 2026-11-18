@@ -1,6 +1,8 @@
 package cn.zzmllk.amadeus
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.ContextCompat
@@ -121,9 +123,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveCpaProfile(profile: CpaServerProfile): Boolean = try {
         val previous = cpaProfileStore.find(profile.id)
+        val endpointChanged = previous != null &&
+            (previous.host != profile.host.trim() || previous.sshPort != profile.sshPort)
         cpaProfileStore.save(profile)
         if (previous != null) stopCpaTunnel()
-        mutableMessage.value = "CPA 服务器档案已保存。"
+        if (endpointChanged) {
+            cpaKeyStore.delete(profile.id)
+            mutableCpaKeys.value = mutableCpaKeys.value - profile.id
+            mutableMessage.value = "服务器地址已更改，旧密钥已清除；请为新目标生成密钥并登记公钥。"
+        } else {
+            mutableMessage.value = "CPA 服务器档案已保存。"
+        }
         true
     } catch (error: Exception) {
         mutableMessage.value = error.message ?: "无法保存 CPA 服务器档案。"
@@ -151,6 +161,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         ?: error("无法读取选择的文件。")
                 }
                 withContext(Dispatchers.IO) { cpaKeyStore.save(profileId, bytes) }
+                cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
                 mutableCpaKeys.value = mutableCpaKeys.value + profileId
                 stopCpaTunnel()
             }
@@ -162,9 +173,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             runBusy("已移除此 CPA 档案的 SSH 私钥。") {
                 stopCpaTunnel()
                 withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
+                cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
                 mutableCpaKeys.value = mutableCpaKeys.value - profileId
             }
         }
+    }
+
+    fun generateCpaKeyPair(profileId: String, replaceExisting: Boolean = false) {
+        viewModelScope.launch {
+            runBusy(null) {
+                val checkedProfile = cpaProfileStore.find(profileId) ?: error("CPA 服务器档案已删除，请刷新后重试。")
+                check(replaceExisting || !cpaKeyStore.hasKey(profileId)) { "此档案已有密钥；请确认后再生成替换密钥。" }
+                val publicKey = runInterruptible(Dispatchers.IO) { cpaKeyStore.generate(profileId) }
+                if (cpaProfileStore.find(profileId) != checkedProfile) {
+                    withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
+                    error("CPA 服务器档案在生成密钥期间发生变化，密钥已清除，请重试。")
+                }
+                cpaProfileStore.save(checkedProfile.copy(publicKey = publicKey))
+                mutableCpaKeys.value = mutableCpaKeys.value + profileId
+                stopCpaTunnel()
+                mutableMessage.value = "手机密钥已生成并加密保存。公钥已显示；服务器登记前尚不能用它登录。"
+            }
+        }
+    }
+
+    fun copyCpaPublicKey(profileId: String) {
+        val publicKey = cpaProfileStore.find(profileId)?.publicKey
+        if (publicKey.isNullOrBlank()) {
+            mutableMessage.value = "此 CPA 档案没有可复制的手机公钥。"
+            return
+        }
+        val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        if (clipboard == null) {
+            mutableMessage.value = "无法访问剪贴板。"
+            return
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText("CPA SSH 公钥", publicKey))
+        mutableMessage.value = "已复制公钥。私钥仍保留在手机加密存储中。"
     }
 
     fun selectCpaProfile(profileId: String?) {

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
@@ -106,6 +107,7 @@ import cn.zzmllk.amadeus.ConsoleRequest
 import cn.zzmllk.amadeus.ConsoleTarget
 import cn.zzmllk.amadeus.R
 import cn.zzmllk.amadeus.data.AppConfig
+import cn.zzmllk.amadeus.data.CpaSshKeyGenerator
 import cn.zzmllk.amadeus.data.CpaServerProfile
 import cn.zzmllk.amadeus.service.TunnelState
 
@@ -273,6 +275,8 @@ fun AmadeusApp(
                                     onSaveCpaProfile = viewModel::saveCpaProfile,
                                     onDeleteCpaProfile = viewModel::deleteCpaProfile,
                                     onTestCpaProfile = viewModel::testCpaProfile,
+                                    onGenerateCpaKey = viewModel::generateCpaKeyPair,
+                                    onCopyCpaPublicKey = viewModel::copyCpaPublicKey,
                                     onImportCpaKey = { profileId ->
                                         cpaKeyImportTarget = profileId
                                         importCpaKey.launch(arrayOf("*/*"))
@@ -774,11 +778,14 @@ private fun SettingsScreen(
     onSaveCpaProfile: (CpaServerProfile) -> Boolean,
     onDeleteCpaProfile: (String) -> Unit,
     onTestCpaProfile: (String) -> Unit,
+    onGenerateCpaKey: (String, Boolean) -> Unit,
+    onCopyCpaPublicKey: (String) -> Unit,
     onImportCpaKey: (String) -> Unit,
     onClearCpaKey: (String) -> Unit
 ) {
     var editingCpaProfile by remember { mutableStateOf<CpaServerProfile?>(null) }
     var confirmingDelete by remember { mutableStateOf<CpaServerProfile?>(null) }
+    var confirmingKeyReplacement by remember { mutableStateOf<CpaServerProfile?>(null) }
     var addCpaProfile by remember { mutableStateOf(false) }
     if (addCpaProfile || editingCpaProfile != null) {
         CpaProfileEditorDialog(
@@ -801,6 +808,22 @@ private fun SettingsScreen(
                 Button(onClick = { onDeleteCpaProfile(profile.id); confirmingDelete = null }) { Text("删除档案") }
             },
             dismissButton = { OutlinedButton(onClick = { confirmingDelete = null }) { Text("取消") } }
+        )
+    }
+    confirmingKeyReplacement?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { confirmingKeyReplacement = null },
+            title = { Text("替换此档案的 SSH 密钥？") },
+            text = {
+                Text("手机会生成新的私钥并加密保存。新公钥需要登记到“${profile.name}”服务器；登记完成前，新密钥无法登录。原私钥的加密回退副本保留在应用私有存储中。")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    onGenerateCpaKey(profile.id, true)
+                    confirmingKeyReplacement = null
+                }) { Text("生成并替换") }
+            },
+            dismissButton = { OutlinedButton(onClick = { confirmingKeyReplacement = null }) { Text("取消") } }
         )
     }
     Column(
@@ -860,7 +883,11 @@ private fun SettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(profile.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val keyStatus = if (profile.id in cpaKeyProfiles) "私钥已加密" else "未导入私钥"
+                        val keyStatus = when {
+                            profile.publicKey.isNotBlank() -> "手机私钥已加密 · 公钥待登记"
+                            profile.id in cpaKeyProfiles -> "私钥已加密"
+                            else -> "尚未生成密钥"
+                        }
                         val hostStatus = if (profile.hasTrustedHost) "指纹已固定" else "需确认指纹"
                         Text("$keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
                     }
@@ -874,6 +901,54 @@ private fun SettingsScreen(
                         Icon(Icons.Rounded.DeleteOutline, contentDescription = "删除 ${profile.name}")
                     }
                 }
+                FilledTonalButton(
+                    onClick = {
+                        if (profile.id in cpaKeyProfiles) confirmingKeyReplacement = profile
+                        else onGenerateCpaKey(profile.id, false)
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Rounded.Key, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (profile.id in cpaKeyProfiles) "生成并替换手机密钥" else "在手机生成 SSH 密钥")
+                }
+                if (profile.publicKey.isNotBlank()) {
+                    Text("公钥 · 需在服务器登记后才能登录", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        CpaSshKeyGenerator.fingerprint(profile.publicKey),
+                        color = MutedInk,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                            .background(Color(0xFFF5F8FC), RoundedCornerShape(6.dp))
+                            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
+                            .padding(10.dp)
+                    ) {
+                        SelectionContainer {
+                            Text(
+                                profile.publicKey,
+                                modifier = Modifier.fillMaxWidth(),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                color = Ink
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { onCopyCpaPublicKey(profile.id) },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("复制公钥")
+                    }
+                }
                 OutlinedButton(
                     onClick = { onImportCpaKey(profile.id) },
                     enabled = !busy,
@@ -881,7 +956,7 @@ private fun SettingsScreen(
                 ) {
                     Icon(Icons.Rounded.Key, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (profile.id in cpaKeyProfiles) "更换此档案私钥" else "导入此档案私钥")
+                    Text(if (profile.id in cpaKeyProfiles) "导入其他私钥" else "导入已有私钥")
                 }
                 if (profile.id in cpaKeyProfiles) {
                     OutlinedButton(

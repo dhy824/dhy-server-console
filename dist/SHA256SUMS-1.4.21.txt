@@ -1,0 +1,3 @@
+79dc1c4b93df275a1c506f7051be4a647bb845b47706a72ee72d924ace227529  dhy-server-console-1.4.21.apk
+14c1e09e38ce9bcb2d4c1086596785f31108f53d8345cc7f9f03acf9e1b21f5e  licenses-and-notices-1.4.21.zip
+e2dfeee6159c85b4901f1ef2abb418bc299dfac200569e57c96e336eb26b5d84  verification-1.4.21.json

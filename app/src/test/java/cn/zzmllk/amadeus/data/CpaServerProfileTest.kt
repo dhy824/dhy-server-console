@@ -49,6 +49,18 @@ class CpaServerProfileTest {
     }
 
     @Test
+    fun generatedPublicKeyPersistsAndEndpointChangeClearsIt() {
+        val publicKey = "ssh-ed25519 cHVibGljLWtleQ== amadeus-cpa-12345678"
+        val original = profile(localHostOctet = 2).copy(publicKey = publicKey)
+        val decoded = CpaProfileCodec.decode(CpaProfileCodec.encode(listOf(original))).single()
+        val moved = CpaProfileCodec.normalize(decoded.copy(host = "another.invalid"), decoded)
+
+        assertEquals(publicKey, decoded.publicKey)
+        assertEquals("", moved.publicKey)
+        assertEquals(null, moved.localHostOctet)
+    }
+
+    @Test
     fun invalidOrDuplicateProfilesAreRejected() {
         val first = profile()
         val duplicateName = profile(name = "OSAKA")

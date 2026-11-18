@@ -20,6 +20,16 @@ import javax.crypto.spec.GCMParameterSpec
 class CpaSecureKeyStore(context: Context) {
     private val directory = File(context.applicationContext.filesDir, "cpa_ssh_identities")
 
+    fun generate(profileId: String): String = synchronized(STORAGE_LOCK) {
+        val generated = CpaSshKeyGenerator.generate(profileId)
+        try {
+            save(profileId, generated.privateKey)
+            generated.publicKey
+        } finally {
+            generated.privateKey.fill(0)
+        }
+    }
+
     fun hasKey(profileId: String): Boolean = synchronized(STORAGE_LOCK) {
         val file = atomicFile(profileId).baseFile
         listOf(file, File(file.path + ".bak"), previousFile(profileId).baseFile).any {

@@ -21,7 +21,8 @@ data class CpaServerProfile(
     val user: String,
     val trustedHostKey: String = "",
     val trustedHostKeyType: String = "",
-    val localHostOctet: Int? = null
+    val localHostOctet: Int? = null,
+    val publicKey: String = ""
 ) {
     val hasTrustedHost: Boolean
         get() = trustedHostKey.isNotBlank() && trustedHostKeyType.isNotBlank()
@@ -55,6 +56,7 @@ object CpaProfileCodec {
                     put("trustedHostKey", profile.trustedHostKey)
                     put("trustedHostKeyType", profile.trustedHostKeyType)
                     put("localHostOctet", profile.localHostOctet ?: JSONObject.NULL)
+                    put("publicKey", profile.publicKey)
                 })
             }
         }.toString()
@@ -73,7 +75,8 @@ object CpaProfileCodec {
                         user = row.getString("user"),
                         trustedHostKey = row.optString("trustedHostKey"),
                         trustedHostKeyType = row.optString("trustedHostKeyType"),
-                        localHostOctet = row.optInt("localHostOctet", -1).takeIf { it in 2..17 }
+                        localHostOctet = row.optInt("localHostOctet", -1).takeIf { it in 2..17 },
+                        publicKey = row.optString("publicKey")
                     )
                 }
             }
@@ -91,6 +94,7 @@ object CpaProfileCodec {
             user = profile.user.trim(),
             trustedHostKey = if (endpointChanged) "" else profile.trustedHostKey,
             trustedHostKeyType = if (endpointChanged) "" else profile.trustedHostKeyType,
+            publicKey = if (endpointChanged) "" else profile.publicKey,
             localHostOctet = when {
                 endpointChanged -> null
                 previous != null -> previous.localHostOctet
@@ -126,6 +130,14 @@ object CpaProfileCodec {
             require(profile.sshPort in 1..65535) { "SSH 端口无效。" }
             require(profile.localHostOctet == null || profile.localHostOctet in 2..17) { "CPA 档案回环地址无效。" }
             require(profile.user.matches(Regex("^[A-Za-z0-9._-]{1,64}$"))) { "SSH 用户名格式不正确。" }
+            require(profile.publicKey.length <= 8192 && profile.publicKey.none(Char::isISOControl)) {
+                "SSH 公钥文本无效。"
+            }
+            if (profile.publicKey.isNotBlank()) {
+                require(profile.publicKey.matches(Regex("^ssh-ed25519 [A-Za-z0-9+/]+={0,2} amadeus-cpa-[0-9a-f]{8}$"))) {
+                    "此 CPA 档案的登记公钥格式无效。"
+                }
+            }
             require(profile.trustedHostKey.length <= 8192 && profile.trustedHostKeyType.length <= 80) {
                 "服务器主机指纹数据无效。"
             }
