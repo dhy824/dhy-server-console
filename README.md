@@ -1,6 +1,6 @@
 # 2026-11-18 Android CPA 独立服务器选择器 1.4.20
 
-源码版本1.4.20/versionCode35新增独立 CPA 服务器档案选择器。每个档案使用单独加密的 SSH 私钥、独立固定的主机指纹和不可复用的本机回环来源；只转发所选服务器的回环 8317，固定插件路径返回 HTTP 200 后才打开。默认 SSH 连接、服务器配置、DNS 和公网入口保持不变。Public Release/Lint/36项JVM测试、空默认地址与原签名连续性通过；APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。GitHub Actions 会重组 APK、复核校验和后发布 APK 与许可附件；Android 真机和目标服务器连接仍待用户验收。
+源码版本1.4.20/versionCode35已正式发布为[GitHub Release v1.4.20](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.20)。新增独立 CPA 服务器档案选择器，每个档案使用单独加密的 SSH 私钥、独立固定的主机指纹和不可复用的本机回环来源；只转发所选服务器的回环 8317，固定插件路径返回 HTTP 200 后才打开。默认 SSH 连接、服务器配置、DNS 和公网入口保持不变。GitHub Actions `44236871591` 成功，Release、Lint、36项JVM测试、空默认地址与原签名连续性通过；APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。Android 真机和目标服务器连接仍待用户验收。
 
 # 2026-11-12 Zako 动态本地转发修复与首页审核入口 1.4.17（已正式发布）
 
@@ -52,7 +52,7 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 每个档案的私钥以 Android Keystore 单独加密；删除档案会移除其档案数据、固定指纹和专用私钥，但不影响默认 SSH 私钥。服务器地址/端口修改会清除该档案旧指纹并更换其回环来源，必须重新核对。不同档案使用不同的 `127.0.0.x` 回环来源以隔离 WebView Cookie，删除或更换端点后旧来源不复用。应用仅通过 SSH 把所选服务器的 `127.0.0.1:8317` 转到手机回环，并打开固定 `/v0/resource/plugins/freetier/console` 路径；页面必须 HTTP 200 才算就绪。没有公网监听或 DNS 变更。
 
-1.4.20 的 Release、Lint、36 项 JVM 测试、Public 空地址、非调试标记及原签名连续性均通过；APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。GitHub 发行由 `.github/workflows/publish-release-v1.4.20.yml` 重组 APK、校验 APK/许可附件和验收数据后完成。Android 真机安装与目标服务器交互仍待验证。设备回退须沿原签名构建更高 versionCode 的恢复包，不卸载清数据。
+1.4.20 已由 GitHub Actions 运行 `44236871591` 正式发布；Release、Lint、36 项 JVM 测试、Public 空地址、非调试标记及原签名连续性均通过。APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。Android 真机安装与目标服务器交互仍待验证。设备回退须沿原签名构建更高 versionCode 的恢复包，不卸载清数据。
 
 1.4.1 已于 2026-10-08 经用户确认发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.1)。Actions 37704959564 成功，实际下载 APK 摘要与本地一致。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
 
