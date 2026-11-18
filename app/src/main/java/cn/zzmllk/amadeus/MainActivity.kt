@@ -35,6 +35,8 @@ class MainActivity : ComponentActivity() {
                                 .putExtra(WebConsoleActivity.EXTRA_URL, request.url)
                                 .putExtra(WebConsoleActivity.EXTRA_TUNNEL_ACTION, request.tunnelAction)
                                 .putExtra(WebConsoleActivity.EXTRA_CPA_PROFILE_ID, request.cpaProfileId)
+                                .putExtra(WebConsoleActivity.EXTRA_SERVER_PROFILE_ID, request.serverProfileId)
+                                .putExtra(WebConsoleActivity.EXTRA_SERVER_PROFILE_SELECTED, true)
                         )
                     }
                 )

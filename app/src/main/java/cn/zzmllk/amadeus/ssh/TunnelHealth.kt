@@ -6,8 +6,13 @@ import java.util.Locale
 import cn.zzmllk.amadeus.data.IdentityKeyException
 
 /** Probe fixed loopback HTTP services without Android proxy or cleartext-policy mediation. */
-fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): Boolean {
-    return tunnelHttpStatus(port, path, timeoutMillis)?.let { it in 200..499 } == true
+fun tunnelHttpReady(
+    port: Int,
+    path: String = "/",
+    timeoutMillis: Int = 1_500,
+    loopbackHost: String = "127.0.0.1"
+): Boolean {
+    return tunnelHttpStatus(port, path, timeoutMillis, loopbackHost)?.let { it in 200..499 } == true
 }
 
 fun tunnelHttpStatus(

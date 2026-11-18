@@ -13,6 +13,19 @@ import java.util.UUID
 
 const val CPA_CONSOLE_PATH = "/v0/resource/plugins/freetier/console"
 
+enum class ServerService(val storageKey: String, val displayName: String) {
+    CPA("cpa", "CPA"),
+    TERMINAL("terminal", "终端"),
+    API("api", "反代 API"),
+    ASTRBOT("astrbot", "AstrBot"),
+    ZAKO("zako", "Zako"),
+    SUBSCRIPTIONS("subscriptions", "订阅管理"),
+    SPEED_TEST("speed_test", "节点测速"),
+    REVIEW("review", "审核"),
+    DISTILLATION("distillation", "蒸馏"),
+    UPDATES("updates", "服务器更新")
+}
+
 data class CpaServerProfile(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -22,19 +35,23 @@ data class CpaServerProfile(
     val trustedHostKey: String = "",
     val trustedHostKeyType: String = "",
     val localHostOctet: Int? = null,
-    val publicKey: String = ""
+    val publicKey: String = "",
+    val apiLocalPort: Int = 18317,
+    val astrBotLocalPort: Int = 16185,
+    val configuredServices: Set<ServerService> = setOf(ServerService.CPA)
 ) {
     val hasTrustedHost: Boolean
         get() = trustedHostKey.isNotBlank() && trustedHostKeyType.isNotBlank()
     val localHost: String
         get() = "127.0.0.${localHostOctet ?: error("CPA 档案回环地址尚未分配。") }"
+    fun supports(service: ServerService): Boolean = service in configuredServices
 
     fun toAppConfig() = AppConfig(
         host = host,
         sshPort = sshPort,
         user = user,
-        apiLocalPort = 18317,
-        astrBotLocalPort = 16185,
+        apiLocalPort = apiLocalPort,
+        astrBotLocalPort = astrBotLocalPort,
         trustedHostKey = trustedHostKey,
         trustedHostKeyType = trustedHostKeyType
     )
@@ -57,6 +74,11 @@ object CpaProfileCodec {
                     put("trustedHostKeyType", profile.trustedHostKeyType)
                     put("localHostOctet", profile.localHostOctet ?: JSONObject.NULL)
                     put("publicKey", profile.publicKey)
+                    put("apiLocalPort", profile.apiLocalPort)
+                    put("astrBotLocalPort", profile.astrBotLocalPort)
+                    put("configuredServices", JSONArray().apply {
+                        profile.configuredServices.forEach { put(it.storageKey) }
+                    })
                 })
             }
         }.toString()
@@ -76,7 +98,14 @@ object CpaProfileCodec {
                         trustedHostKey = row.optString("trustedHostKey"),
                         trustedHostKeyType = row.optString("trustedHostKeyType"),
                         localHostOctet = row.optInt("localHostOctet", -1).takeIf { it in 2..17 },
-                        publicKey = row.optString("publicKey")
+                        publicKey = row.optString("publicKey"),
+                        apiLocalPort = row.optInt("apiLocalPort", 18317),
+                        astrBotLocalPort = row.optInt("astrBotLocalPort", 16185),
+                        configuredServices = row.optJSONArray("configuredServices")?.let { services ->
+                            List(services.length()) { services.optString(it) }
+                                .mapNotNull { key -> ServerService.entries.firstOrNull { it.storageKey == key } }
+                                .toSet()
+                        } ?: setOf(ServerService.CPA)
                     )
                 }
             }
@@ -92,6 +121,8 @@ object CpaProfileCodec {
             name = profile.name.trim(),
             host = profile.host.trim(),
             user = profile.user.trim(),
+            apiLocalPort = profile.apiLocalPort.coerceIn(1024, 65535),
+            astrBotLocalPort = profile.astrBotLocalPort.coerceIn(1024, 65535),
             trustedHostKey = if (endpointChanged) "" else profile.trustedHostKey,
             trustedHostKeyType = if (endpointChanged) "" else profile.trustedHostKeyType,
             publicKey = if (endpointChanged) "" else profile.publicKey,
@@ -128,6 +159,9 @@ object CpaProfileCodec {
             }
             require(profile.host.matches(Regex("^[A-Za-z0-9.-]{1,253}$"))) { "服务器地址格式不正确。" }
             require(profile.sshPort in 1..65535) { "SSH 端口无效。" }
+            require(profile.apiLocalPort in 1024..65535) { "API 本机端口无效。" }
+            require(profile.astrBotLocalPort in 1024..65535) { "AstrBot 本机端口无效。" }
+            require(profile.apiLocalPort != profile.astrBotLocalPort) { "API 与 AstrBot 本机端口不能相同。" }
             require(profile.localHostOctet == null || profile.localHostOctet in 2..17) { "CPA 档案回环地址无效。" }
             require(profile.user.matches(Regex("^[A-Za-z0-9._-]{1,64}$"))) { "SSH 用户名格式不正确。" }
             require(profile.publicKey.length <= 8192 && profile.publicKey.none(Char::isISOControl)) {
@@ -164,13 +198,17 @@ class CpaProfileStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("amadeus_cpa_profiles", Context.MODE_PRIVATE)
     private val mutableProfiles = MutableStateFlow(readProfiles())
     private val mutableSelectedId = MutableStateFlow(readSelectedId(mutableProfiles.value))
+    private val mutableActiveServerId = MutableStateFlow(readActiveServerId(mutableProfiles.value))
 
     val profiles: StateFlow<List<CpaServerProfile>> = mutableProfiles.asStateFlow()
     val selectedId: StateFlow<String?> = mutableSelectedId.asStateFlow()
+    val activeServerId: StateFlow<String?> = mutableActiveServerId.asStateFlow()
 
     fun current(): List<CpaServerProfile> = readProfiles()
 
     fun find(id: String): CpaServerProfile? = current().firstOrNull { it.id == id }
+
+    fun currentActiveServerId(): String? = readActiveServerId(current())
 
     fun save(profile: CpaServerProfile) {
         val current = current()
@@ -197,6 +235,11 @@ class CpaProfileStore(context: Context) {
         persist(mutableProfiles.value, id)
     }
 
+    fun selectActiveServer(id: String?) {
+        require(id == null || mutableProfiles.value.any { it.id == id }) { "所选服务器档案不存在。" }
+        persist(mutableProfiles.value, mutableSelectedId.value, id)
+    }
+
     fun trustHost(id: String, keyType: String, encodedKey: String) {
         val profile = find(id) ?: error("CPA 服务器档案已删除，请重新选择。")
         save(profile.copy(trustedHostKeyType = keyType, trustedHostKey = encodedKey))
@@ -209,7 +252,8 @@ class CpaProfileStore(context: Context) {
         val retired = readRetiredHostOctets() + listOfNotNull(removed.localHostOctet)
         preferences.edit { putString(KEY_RETIRED_HOSTS, retired.sorted().joinToString(",")) }
         val selected = mutableSelectedId.value.takeUnless { it == id }
-        persist(next, selected)
+        val active = mutableActiveServerId.value.takeUnless { it == id }
+        persist(next, selected, active)
     }
 
     private fun readProfiles(): List<CpaServerProfile> {
@@ -222,22 +266,33 @@ class CpaProfileStore(context: Context) {
     private fun readSelectedId(profiles: List<CpaServerProfile>): String? =
         preferences.getString(KEY_SELECTED, null)?.takeIf { id -> profiles.any { it.id == id } }
 
+    private fun readActiveServerId(profiles: List<CpaServerProfile>): String? =
+        preferences.getString(KEY_ACTIVE_SERVER, null)?.takeIf { id -> profiles.any { it.id == id } }
+
     private fun readRetiredHostOctets(): Set<Int> = preferences.getString(KEY_RETIRED_HOSTS, "").orEmpty()
         .split(',').mapNotNull(String::toIntOrNull).filter { it in 2..17 }.toSet()
 
-    private fun persist(profiles: List<CpaServerProfile>, selectedId: String?) {
+    private fun persist(
+        profiles: List<CpaServerProfile>,
+        selectedId: String?,
+        activeServerId: String? = mutableActiveServerId.value
+    ) {
         CpaProfileCodec.validate(profiles)
+        require(activeServerId == null || profiles.any { it.id == activeServerId }) { "所选服务器档案不存在。" }
         preferences.edit {
             putString(KEY_PROFILES, CpaProfileCodec.encode(profiles))
             if (selectedId == null) remove(KEY_SELECTED) else putString(KEY_SELECTED, selectedId)
+            if (activeServerId == null) remove(KEY_ACTIVE_SERVER) else putString(KEY_ACTIVE_SERVER, activeServerId)
         }
         mutableProfiles.value = profiles
         mutableSelectedId.value = selectedId
+        mutableActiveServerId.value = activeServerId
     }
 
     private companion object {
         const val KEY_PROFILES = "profiles"
         const val KEY_SELECTED = "selected_id"
+        const val KEY_ACTIVE_SERVER = "active_server_id"
         const val KEY_RETIRED_HOSTS = "retired_loopback_addresses"
     }
 }

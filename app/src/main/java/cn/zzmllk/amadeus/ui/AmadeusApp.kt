@@ -109,6 +109,7 @@ import cn.zzmllk.amadeus.R
 import cn.zzmllk.amadeus.data.AppConfig
 import cn.zzmllk.amadeus.data.CpaSshKeyGenerator
 import cn.zzmllk.amadeus.data.CpaServerProfile
+import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.service.TunnelState
 
 private enum class AppTab(val title: String, val icon: ImageVector) {
@@ -126,7 +127,20 @@ fun AmadeusApp(
 ) {
     val config by viewModel.config.collectAsState()
     val cpaProfiles by viewModel.cpaProfiles.collectAsState()
-    val selectedCpaProfileId by viewModel.selectedCpaProfileId.collectAsState()
+    val activeServerId by viewModel.activeServerId.collectAsState()
+    val activeServerProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
+    val activeServerName = activeServerProfile?.let { "甲骨文 · ${it.name}" } ?: "阿里云"
+    val activeConfig = activeServerProfile?.toAppConfig() ?: config
+    val configuredServices = activeServerProfile?.configuredServices ?: ServerService.entries.toSet()
+    val visibleTabs = remember(configuredServices) {
+        buildList {
+            add(AppTab.HOME)
+            if (ServerService.TERMINAL in configuredServices) add(AppTab.TERMINAL)
+            if (ServerService.SUBSCRIPTIONS in configuredServices) add(AppTab.SUBSCRIPTIONS)
+            if (ServerService.UPDATES in configuredServices) add(AppTab.UPDATES)
+            add(AppTab.SETTINGS)
+        }
+    }
     val cpaKeyProfiles by viewModel.cpaKeyProfiles.collectAsState()
     val tunnel by viewModel.tunnel.collectAsState()
     val keyImported by viewModel.keyImported.collectAsState()
@@ -138,8 +152,8 @@ fun AmadeusApp(
     val snackbar = remember { SnackbarHostState() }
     val navigationHaze = remember { HazeState() }
     var selected by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(selected) {
-        if (selected !in AppTab.entries.indices) selected = AppTab.HOME.ordinal
+    LaunchedEffect(selected, visibleTabs) {
+        if (visibleTabs.none { it.ordinal == selected }) selected = AppTab.HOME.ordinal
     }
     var confirmSpeed by remember { mutableStateOf(false) }
     val importKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -202,7 +216,7 @@ fun AmadeusApp(
         val useNavigationRail = maxWidth >= 600.dp
         Row(Modifier.fillMaxSize()) {
             if (useNavigationRail) {
-                AppNavigationRail(selected = selected, onSelected = { selected = it })
+                AppNavigationRail(tabs = visibleTabs, selected = selected, onSelected = { selected = it })
             }
             Scaffold(
                 modifier = Modifier.weight(1f).imePadding(),
@@ -210,7 +224,7 @@ fun AmadeusApp(
                 snackbarHost = { SnackbarHost(snackbar) },
                 bottomBar = {
                     if (!useNavigationRail) {
-                        AppBottomNavigation(selected = selected, onSelected = { selected = it }, hazeState = navigationHaze)
+                        AppBottomNavigation(tabs = visibleTabs, selected = selected, onSelected = { selected = it }, hazeState = navigationHaze)
                     }
                 }
             ) { padding ->
@@ -228,19 +242,26 @@ fun AmadeusApp(
                                 .fillMaxWidth()
                         ) {
                             AppHeader(tunnel = tunnel, busy = busy)
-                            when (AppTab.entries.getOrElse(selected) { AppTab.HOME }) {
+                            when (visibleTabs.firstOrNull { it.ordinal == selected } ?: AppTab.HOME) {
                                 AppTab.HOME -> DashboardScreen(
                                     bottomInset = padding.calculateBottomPadding(),
-                                    config = config,
+                                    config = activeConfig,
+                                    activeServerName = activeServerName,
                                     tunnel = tunnel,
                                     cpaProfiles = cpaProfiles,
-                                    selectedCpaProfileId = selectedCpaProfileId,
+                                    selectedCpaProfileId = activeServerId,
+                                    showApi = ServerService.API in configuredServices,
+                                    showAstrBot = ServerService.ASTRBOT in configuredServices,
+                                    showZako = ServerService.ZAKO in configuredServices,
+                                    showReview = ServerService.REVIEW in configuredServices,
+                                    showDistillation = ServerService.DISTILLATION in configuredServices,
+                                    showSpeedTest = ServerService.SPEED_TEST in configuredServices,
+                                    showCpa = activeServerProfile?.supports(ServerService.CPA) == true,
                                     busy = busy,
                                     onOpenApi = { viewModel.open(ConsoleTarget.API) },
                                     onOpenAstrBot = { viewModel.open(ConsoleTarget.ASTRBOT) },
                                     onOpenZako = { viewModel.open(ConsoleTarget.ZAKO) },
-                                    onSelectCpa = viewModel::selectCpaProfile,
-                                    onOpenCpa = { viewModel.openCpaConsole(selectedCpaProfileId) },
+                                    onOpenCpa = { viewModel.openCpaConsole(activeServerId) },
                                     onStopCpa = viewModel::stopCpaTunnel,
                                     onOpenDistillation = { viewModel.open(ConsoleTarget.ASTRBOT, analysis = true) },
                                     onOpenReview = { viewModel.open(ConsoleTarget.ASTRBOT, review = true) },
@@ -259,6 +280,7 @@ fun AmadeusApp(
                                 AppTab.SETTINGS -> SettingsScreen(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,
+                                    showDefaultConnection = activeServerId == null,
                                     keyImported = keyImported,
                                     busy = busy,
                                     onUpdate = viewModel::updateConfig,
@@ -270,8 +292,8 @@ fun AmadeusApp(
                                     onClearTrust = { viewModel.updateConfig { it.copy(trustedHostKey = "", trustedHostKeyType = "") } },
                                     cpaProfiles = cpaProfiles,
                                     cpaKeyProfiles = cpaKeyProfiles,
-                                    selectedCpaProfileId = selectedCpaProfileId,
-                                    onSelectCpa = viewModel::selectCpaProfile,
+                                    activeServerId = activeServerId,
+                                    onSelectActiveServer = viewModel::selectActiveServer,
                                     onSaveCpaProfile = viewModel::saveCpaProfile,
                                     onDeleteCpaProfile = viewModel::deleteCpaProfile,
                                     onTestCpaProfile = viewModel::testCpaProfile,
@@ -293,7 +315,7 @@ fun AmadeusApp(
 }
 
 @Composable
-private fun AppBottomNavigation(selected: Int, onSelected: (Int) -> Unit, hazeState: HazeState) {
+private fun AppBottomNavigation(tabs: List<AppTab>, selected: Int, onSelected: (Int) -> Unit, hazeState: HazeState) {
     val shape = RoundedCornerShape(24.dp)
     Box(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 7.dp),
@@ -318,7 +340,8 @@ private fun AppBottomNavigation(selected: Int, onSelected: (Int) -> Unit, hazeSt
         tonalElevation = 0.dp,
         windowInsets = WindowInsets(0, 0, 0, 0)
       ) {
-        AppTab.entries.forEachIndexed { index, tab ->
+        tabs.forEach { tab ->
+            val index = tab.ordinal
             NavigationBarItem(
                 selected = selected == index,
                 onClick = { onSelected(index) },
@@ -338,13 +361,14 @@ private fun AppBottomNavigation(selected: Int, onSelected: (Int) -> Unit, hazeSt
 }
 
 @Composable
-private fun AppNavigationRail(selected: Int, onSelected: (Int) -> Unit) {
+private fun AppNavigationRail(tabs: List<AppTab>, selected: Int, onSelected: (Int) -> Unit) {
     NavigationRail(
         modifier = Modifier.fillMaxHeight().statusBarsPadding(),
         containerColor = Color.White.copy(alpha = 0.96f)
     ) {
         Spacer(Modifier.height(12.dp))
-        AppTab.entries.forEachIndexed { index, tab ->
+        tabs.forEach { tab ->
+            val index = tab.ordinal
             NavigationRailItem(
                 selected = selected == index,
                 onClick = { onSelected(index) },
@@ -427,14 +451,21 @@ private fun AppHeader(
 private fun DashboardScreen(
     bottomInset: Dp,
     config: AppConfig,
+    activeServerName: String,
     tunnel: TunnelState,
     cpaProfiles: List<CpaServerProfile>,
     selectedCpaProfileId: String?,
+    showApi: Boolean,
+    showAstrBot: Boolean,
+    showZako: Boolean,
+    showReview: Boolean,
+    showDistillation: Boolean,
+    showSpeedTest: Boolean,
+    showCpa: Boolean,
     busy: Boolean,
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
     onOpenZako: () -> Unit,
-    onSelectCpa: (String?) -> Unit,
     onOpenCpa: () -> Unit,
     onStopCpa: () -> Unit,
     onOpenDistillation: () -> Unit,
@@ -452,35 +483,23 @@ private fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("快捷管理", style = MaterialTheme.typography.displaySmall)
-        Text("通过本机 SSH 安全通道访问服务，管理页面不会直接暴露到公网。", color = MutedInk)
+        Text("当前服务器：$activeServerName。通过本机 SSH 安全通道管理，目标不会直接暴露到公网。", color = MutedInk)
         Spacer(Modifier.height(2.dp))
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (showApi || showAstrBot) BoxWithConstraints(Modifier.fillMaxWidth()) {
             val showConsoleCardsSideBySide = maxWidth >= 760.dp
-            if (showConsoleCardsSideBySide) {
+            if (showConsoleCardsSideBySide && showApi && showAstrBot) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    ConsoleActionCard(
-                        target = ConsoleTarget.API,
-                        tunnel = tunnel,
-                        busy = busy,
-                        onClick = onOpenApi,
-                        modifier = Modifier.weight(1f)
-                    )
-                    ConsoleActionCard(
-                        target = ConsoleTarget.ASTRBOT,
-                        tunnel = tunnel,
-                        busy = busy,
-                        onClick = onOpenAstrBot,
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (showApi) ConsoleActionCard(ConsoleTarget.API, tunnel, busy, onOpenApi, Modifier.weight(1f))
+                    if (showAstrBot) ConsoleActionCard(ConsoleTarget.ASTRBOT, tunnel, busy, onOpenAstrBot, Modifier.weight(1f))
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    ConsoleActionCard(ConsoleTarget.API, tunnel, busy, onOpenApi)
-                    ConsoleActionCard(ConsoleTarget.ASTRBOT, tunnel, busy, onOpenAstrBot)
+                    if (showApi) ConsoleActionCard(ConsoleTarget.API, tunnel, busy, onOpenApi)
+                    if (showAstrBot) ConsoleActionCard(ConsoleTarget.ASTRBOT, tunnel, busy, onOpenAstrBot)
                 }
             }
         }
-        FilledTonalButton(
+        if (showReview) FilledTonalButton(
             onClick = onOpenReview,
             enabled = !busy,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -489,7 +508,7 @@ private fun DashboardScreen(
             Spacer(Modifier.width(8.dp))
             Text("打开审核中心")
         }
-        ActionCard(
+        if (showDistillation) ActionCard(
             icon = Icons.Rounded.Dashboard,
             eyebrow = "蒸馏中心",
             title = "Null 与仔仔的分析进度",
@@ -499,7 +518,7 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenDistillation
         )
-        ActionCard(
+        if (showZako) ActionCard(
             icon = Icons.Rounded.Security,
             eyebrow = "ZAKO",
             title = "Zako WebUI",
@@ -509,17 +528,16 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenZako
         )
-        CpaConsoleCard(
+        if (showCpa) CpaConsoleCard(
             profiles = cpaProfiles,
             selectedId = selectedCpaProfileId,
             active = tunnel.cpaActive,
             busy = busy,
-            onSelect = onSelectCpa,
             onOpen = onOpenCpa,
             onStop = onStopCpa,
             onManage = onOpenSettings
         )
-        GlassCard {
+        if (showSpeedTest) GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Speed, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(28.dp))
@@ -566,43 +584,23 @@ private fun CpaConsoleCard(
     selectedId: String?,
     active: Boolean,
     busy: Boolean,
-    onSelect: (String?) -> Unit,
     onOpen: () -> Unit,
     onStop: () -> Unit,
     onManage: () -> Unit
 ) {
     val selected = profiles.firstOrNull { it.id == selectedId }
-    var expanded by remember { mutableStateOf(false) }
     GlassCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Memory, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(27.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("CLIProxyAPI 控制台", style = MaterialTheme.typography.titleMedium)
-                Text("经所选服务器 SSH 回环转发", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                Text("当前服务器控制台", style = MaterialTheme.typography.titleMedium)
+                Text("甲骨文当前已配置 CPA", color = MutedInk, style = MaterialTheme.typography.bodySmall)
             }
             StatusBadge(active, if (active) "已连接" else "待机")
         }
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = { expanded = true },
-                enabled = profiles.isNotEmpty() && !busy,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(selected?.name ?: "选择 CPA 服务器", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
-            }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                profiles.forEach { profile ->
-                    DropdownMenuItem(
-                        text = { Text(profile.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        onClick = { expanded = false; onSelect(profile.id) }
-                    )
-                }
-            }
-        }
+        Text(selected?.name ?: "请选择已配置 CPA 的服务器", color = MutedInk, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         FilledTonalButton(
             onClick = onOpen,
@@ -611,7 +609,7 @@ private fun CpaConsoleCard(
         ) {
             Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("打开 FreeTier2API 控制台")
+            Text("打开所选服务器的 FreeTier2API 控制台")
         }
         if (active) {
             OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -620,7 +618,7 @@ private fun CpaConsoleCard(
         }
         if (profiles.isEmpty()) {
             Spacer(Modifier.height(4.dp))
-            Text("先在设置中添加服务器档案并确认主机指纹。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+            Text("默认服务器没有可用的 FreeTier2API 页面时，请在设置中添加并选择对应服务器档案。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = onManage, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("管理 CPA 服务器") }
         }
     }
@@ -764,6 +762,7 @@ private fun TerminalScreen(output: String, busy: Boolean, bottomInset: Dp, onRun
 private fun SettingsScreen(
     bottomInset: Dp,
     config: AppConfig,
+    showDefaultConnection: Boolean,
     keyImported: Boolean,
     busy: Boolean,
     onUpdate: ((AppConfig) -> AppConfig) -> Unit,
@@ -773,8 +772,8 @@ private fun SettingsScreen(
     onClearTrust: () -> Unit,
     cpaProfiles: List<CpaServerProfile>,
     cpaKeyProfiles: Set<String>,
-    selectedCpaProfileId: String?,
-    onSelectCpa: (String?) -> Unit,
+    activeServerId: String?,
+    onSelectActiveServer: (String?) -> Unit,
     onSaveCpaProfile: (CpaServerProfile) -> Boolean,
     onDeleteCpaProfile: (String) -> Unit,
     onTestCpaProfile: (String) -> Unit,
@@ -787,10 +786,11 @@ private fun SettingsScreen(
     var confirmingDelete by remember { mutableStateOf<CpaServerProfile?>(null) }
     var confirmingKeyReplacement by remember { mutableStateOf<CpaServerProfile?>(null) }
     var addCpaProfile by remember { mutableStateOf(false) }
+    var serverPickerExpanded by remember { mutableStateOf(false) }
     if (addCpaProfile || editingCpaProfile != null) {
         CpaProfileEditorDialog(
             initial = editingCpaProfile,
-            defaultUser = config.user,
+            defaultUser = "ubuntu",
             onDismiss = { addCpaProfile = false; editingCpaProfile = null },
             onSave = { profile ->
                 val saved = onSaveCpaProfile(profile)
@@ -802,7 +802,7 @@ private fun SettingsScreen(
     confirmingDelete?.let { profile ->
         AlertDialog(
             onDismissRequest = { confirmingDelete = null },
-            title = { Text("删除 CPA 服务器档案？") },
+            title = { Text("删除服务器？") },
             text = { Text("“${profile.name}”的地址、主机指纹和该档案专用私钥会从本机移除。默认 SSH 私钥不受影响。") },
             confirmButton = {
                 Button(onClick = { onDeleteCpaProfile(profile.id); confirmingDelete = null }) { Text("删除档案") }
@@ -830,10 +830,38 @@ private fun SettingsScreen(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottomInset).padding(horizontal = 20.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("连接设置", style = MaterialTheme.typography.headlineSmall)
-        Text("参数修改会自动保存到当前手机。私钥使用 Android Keystore 加密。", color = MutedInk)
+        Text("服务器选择", style = MaterialTheme.typography.headlineSmall)
+        Text("选择阿里云或甲骨文后，已配置的连接操作会使用该服务器各自保存的 SSH 私钥。", color = MutedInk)
         GlassCard {
-            Text("服务器", style = MaterialTheme.typography.titleMedium)
+            Text("当前服务器", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            val activeProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
+            Box(Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { serverPickerExpanded = true },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(activeProfile?.let { "甲骨文 · ${it.name}" } ?: "阿里云", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = "选择当前服务器")
+                }
+                DropdownMenu(expanded = serverPickerExpanded, onDismissRequest = { serverPickerExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("阿里云（原有连接和私钥）") },
+                        onClick = { serverPickerExpanded = false; onSelectActiveServer(null) }
+                    )
+                    cpaProfiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = { Text("甲骨文 · ${profile.name}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            onClick = { serverPickerExpanded = false; onSelectActiveServer(profile.id) }
+                        )
+                    }
+                }
+            }
+        }
+        if (showDefaultConnection) GlassCard {
+            Text("阿里云连接设置", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = config.host,
@@ -854,7 +882,7 @@ private fun SettingsScreen(
                 PortField("SSH 端口", config.sshPort, Modifier.weight(0.72f)) { port -> onUpdate { it.copy(sshPort = port) } }
             }
         }
-        GlassCard {
+        if (showDefaultConnection) GlassCard {
             Text("本机端口", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -865,15 +893,15 @@ private fun SettingsScreen(
         GlassCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("CPA 服务器", style = MaterialTheme.typography.titleMedium)
-                    Text("独立于上方默认 SSH 连接", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                    Text("其他服务器", style = MaterialTheme.typography.titleMedium)
+                    Text("阿里云保留原连接，Oracle 档案独立保存私钥和主机指纹", color = MutedInk, style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { addCpaProfile = true; editingCpaProfile = null }, enabled = cpaProfiles.size < 16) {
-                    Icon(Icons.Rounded.Add, contentDescription = "添加 CPA 服务器")
+                    Icon(Icons.Rounded.Add, contentDescription = "添加服务器")
                 }
             }
             if (cpaProfiles.isEmpty()) {
-                Text("尚未添加 CPA 服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                Text("尚未添加其他服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
             }
             cpaProfiles.forEach { profile ->
                 HorizontalDivider(color = Hairline)
@@ -889,10 +917,10 @@ private fun SettingsScreen(
                             else -> "尚未生成密钥"
                         }
                         val hostStatus = if (profile.hasTrustedHost) "指纹已固定" else "需确认指纹"
-                        Text("$keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                        Text("仅 CPA · $keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
                     }
-                    OutlinedButton(onClick = { onSelectCpa(profile.id) }, enabled = selectedCpaProfileId != profile.id) {
-                        Text(if (selectedCpaProfileId == profile.id) "已选" else "选择")
+                    if (activeServerId == profile.id) {
+                        Text("当前", color = GoogleBlueDark, style = MaterialTheme.typography.labelMedium)
                     }
                     IconButton(onClick = { editingCpaProfile = profile; addCpaProfile = false }) {
                         Icon(Icons.Rounded.Edit, contentDescription = "编辑 ${profile.name}")
@@ -967,7 +995,7 @@ private fun SettingsScreen(
                 }
                 OutlinedButton(
                     onClick = { onTestCpaProfile(profile.id) },
-                    enabled = !busy && profile.id in cpaKeyProfiles,
+                    enabled = !busy && profile.id == activeServerId && profile.id in cpaKeyProfiles,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Rounded.Security, contentDescription = null)
@@ -976,6 +1004,7 @@ private fun SettingsScreen(
                 }
             }
         }
+        if (showDefaultConnection) {
         GlassCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Key, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(27.dp))
@@ -1022,6 +1051,7 @@ private fun SettingsScreen(
                 OutlinedButton(onClick = onClearTrust, modifier = Modifier.fillMaxWidth()) { Text("清除已信任指纹") }
             }
         }
+        }
         Spacer(Modifier.height(16.dp))
     }
 }
@@ -1040,13 +1070,13 @@ private fun CpaProfileEditorDialog(
     var validationError by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "添加 CPA 服务器" else "编辑 CPA 服务器") },
+        title = { Text(if (initial == null) "添加服务器" else "编辑服务器") },
         text = {
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("复用此手机已导入的加密 SSH 私钥。地址或端口变更后需重新确认主机指纹。", style = MaterialTheme.typography.bodySmall, color = MutedInk)
+                Text("每台服务器独立保存 SSH 私钥和主机指纹。地址或端口变更后需重新确认主机指纹。", style = MaterialTheme.typography.bodySmall, color = MutedInk)
                 OutlinedTextField(name, { name = it.take(64) }, label = { Text("服务器名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(host, { host = it.take(253) }, label = { Text("地址或域名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(user, { user = it.take(64) }, label = { Text("SSH 用户名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -1065,7 +1095,7 @@ private fun CpaProfileEditorDialog(
                     validationError = "SSH 端口需为 1 到 65535。"
                 } else {
                     onSave(
-                        (initial ?: CpaServerProfile(name = "", host = "", user = "")).copy(
+                        (initial ?: CpaServerProfile(name = "甲骨文云", host = "", user = "ubuntu")).copy(
                             name = name,
                             host = host,
                             user = user,

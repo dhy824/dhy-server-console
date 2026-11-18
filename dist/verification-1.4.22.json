@@ -1,0 +1,28 @@
+{
+  "version": "1.4.22",
+  "versionCode": 37,
+  "package": "cn.zzmllk.amadeus",
+  "apk": "dhy-server-console-1.4.22.apk",
+  "size": 1536253,
+  "sha256": "e6c86982166f0be34559a3adcc3ed79df8879c4c93d8b4f34d5e501de18cdfeb",
+  "publicDefaultsVerified": true,
+  "signatureVerified": true,
+  "signerContinuityVerified": true,
+  "signerContinuityReferenceVersion": "1.4.21",
+  "releaseBuildVerified": true,
+  "lintReleaseVerified": true,
+  "lintIssueCount": 4,
+  "lintIssueIds": [
+    "GradleDependency",
+    "GradleDependency",
+    "GradleDependency",
+    "GradleDependency"
+  ],
+  "jvmTestsPassed": 43,
+  "publicSourceFiles": 76,
+  "sourceManifestVerified": true,
+  "serverChanged": false,
+  "dnsChanged": false,
+  "publicIngressChanged": false,
+  "phoneRealDeviceVerified": false
+}

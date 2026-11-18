@@ -5,9 +5,9 @@ import android.util.AtomicFile
 import android.util.Base64
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import cn.zzmllk.amadeus.data.AppConfig
-import cn.zzmllk.amadeus.data.ConfigStore
-import cn.zzmllk.amadeus.data.SecureKeyStore
+import cn.zzmllk.amadeus.data.ActiveServerConnection
+import cn.zzmllk.amadeus.data.ActiveServerStore
+import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.ssh.SshEngine
 import cn.zzmllk.amadeus.ssh.connectionIdentity
 import java.io.File
@@ -20,8 +20,7 @@ import kotlinx.coroutines.runInterruptible
 import org.json.JSONObject
 
 class UpdatesViewModel(application: Application) : AndroidViewModel(application) {
-    private val config = ConfigStore(application)
-    private val keys = SecureKeyStore(application)
+    private val servers = ActiveServerStore(application)
     private val receipts = File(application.noBackupFilesDir, "project-update-receipts")
     private val last = AtomicFile(File(application.noBackupFilesDir, "last-project-update.json"))
     private val mutableItems = MutableStateFlow(UpdateProtocol.catalog())
@@ -54,16 +53,19 @@ class UpdatesViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun now() = System.currentTimeMillis() / 1000
-    private fun identity(connection: AppConfig) = connectionIdentity(connection, keys.revision)
-    private fun snapshot(): AppConfig = config.current().also {
-        check(keys.hasKey && it.hasTrustedHost) { "请先在设置中导入私钥并核对服务器指纹。" }
+    private fun identity(connection: ActiveServerConnection) = connectionIdentity(connection.config, connection.keyRevision)
+    private fun snapshot(): ActiveServerConnection = servers.current().also {
+        check(it.supports(ServerService.UPDATES)) { "当前服务器未配置项目更新。" }
+        check(it.hasKey && it.config.hasTrustedHost) { "请先为当前服务器配置 SSH 私钥并核对主机指纹。" }
     }
     private fun unchanged(expected: String) {
-        check(identity(config.current()) == expected) { "连接或私钥已变化；请恢复原连接后查询，或重新检查。" }
+        check(identity(servers.current()) == expected) { "当前服务器或私钥已变化；请切回原服务器查询，或重新检查。" }
     }
-    private suspend fun request(connection: AppConfig, expected: String, payload: JSONObject): JSONObject = runInterruptible(Dispatchers.IO) {
+    private suspend fun request(connection: ActiveServerConnection, expected: String, payload: JSONObject): JSONObject = runInterruptible(Dispatchers.IO) {
         unchanged(expected)
-        JSONObject(SshEngine.projectUpdateRequest(connection, keys.read(), payload.toString()))
+        val privateKey = servers.readKey(connection)
+        try { JSONObject(SshEngine.projectUpdateRequest(connection.config, privateKey, payload.toString())) }
+        finally { privateKey.fill(0) }
     }
     private fun action(block: suspend () -> Unit) {
         if (mutableBusy.value) return
@@ -90,7 +92,10 @@ class UpdatesViewModel(application: Application) : AndroidViewModel(application)
                 unchanged(expected)
                 val script = getApplication<Application>().assets.open("update_probe.py").use { it.readBytes() }
                 val encoded = Base64.encodeToString(script, Base64.NO_WRAP)
-                JSONObject(SshEngine.runCommand(connection, keys.read(), "python3 -c \"import base64;exec(base64.b64decode('$encoded'))\""))
+                val privateKey = servers.readKey(connection)
+                try {
+                    JSONObject(SshEngine.runCommand(connection.config, privateKey, "python3 -c \"import base64;exec(base64.b64decode('$encoded'))\""))
+                } finally { privateKey.fill(0) }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { inventoryError = true; JSONObject() }

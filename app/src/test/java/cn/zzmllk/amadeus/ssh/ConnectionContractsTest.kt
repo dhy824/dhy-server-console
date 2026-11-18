@@ -1,6 +1,7 @@
 package cn.zzmllk.amadeus.ssh
 
 import cn.zzmllk.amadeus.data.AppConfig
+import cn.zzmllk.amadeus.data.activeServerKeyRevision
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -32,5 +33,16 @@ class ConnectionContractsTest {
         assertNotEquals(original, connectionIdentity(config.copy(user = "another"), "revision-one"))
         assertNotEquals(original, connectionIdentity(config.copy(host = "another.invalid"), "revision-one"))
         assertNotEquals(original, connectionIdentity(config.copy(apiLocalPort = 19000), "revision-one"))
+    }
+
+    @Test fun serverProfilesHaveDistinctConnectionIdentity() {
+        assertNotEquals(
+            activeServerKeyRevision(null, "same-key"),
+            activeServerKeyRevision("oracle-profile", "same-key")
+        )
+        assertNotEquals(
+            connectionIdentity(config, activeServerKeyRevision("oracle-a", "same-key")),
+            connectionIdentity(config, activeServerKeyRevision("oracle-b", "same-key"))
+        )
     }
 }

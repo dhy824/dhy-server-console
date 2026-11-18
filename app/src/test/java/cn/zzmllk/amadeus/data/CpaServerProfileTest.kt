@@ -30,6 +30,29 @@ class CpaServerProfileTest {
     }
 
     @Test
+    fun legacyProfilesDefaultToCpaOnlyAndConfiguredServicesRoundTrip() {
+        val oracle = profile().copy(configuredServices = setOf(ServerService.CPA))
+        val expanded = profile(name = "Oracle", localHostOctet = 3).copy(
+            configuredServices = setOf(ServerService.CPA, ServerService.ASTRBOT)
+        )
+
+        assertEquals(setOf(ServerService.CPA), CpaProfileCodec.decode(CpaProfileCodec.encode(listOf(oracle))).single().configuredServices)
+        assertEquals(expanded, CpaProfileCodec.decode(CpaProfileCodec.encode(listOf(expanded))).single())
+        assertTrue(oracle.supports(ServerService.CPA))
+        assertFalse(oracle.supports(ServerService.ASTRBOT))
+    }
+
+    @Test
+    fun profileSavedByThePreviousVersionRemainsCpaOnly() {
+        val legacyJson = """[{"id":"${UUID.randomUUID()}","name":"Oracle","host":"example.invalid","sshPort":22,"user":"ubuntu","trustedHostKey":"","trustedHostKeyType":"","localHostOctet":2,"publicKey":"","apiLocalPort":18317,"astrBotLocalPort":16185}]"""
+        val restored = CpaProfileCodec.decode(legacyJson).single()
+
+        assertEquals(setOf(ServerService.CPA), restored.configuredServices)
+        assertTrue(restored.supports(ServerService.CPA))
+        assertFalse(restored.supports(ServerService.SUBSCRIPTIONS))
+    }
+
+    @Test
     fun changedEndpointDropsTheOldHostPinButRenameKeepsIt() {
         val original = profile(key = "cHVibGljLWtleQ==", keyType = "ssh-ed25519", localHostOctet = 2)
 

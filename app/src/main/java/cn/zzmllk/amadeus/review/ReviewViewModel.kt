@@ -3,8 +3,8 @@ package cn.zzmllk.amadeus.review
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import cn.zzmllk.amadeus.data.ConfigStore
-import cn.zzmllk.amadeus.data.SecureKeyStore
+import cn.zzmllk.amadeus.data.ActiveServerStore
+import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.ssh.SshEngine
 import cn.zzmllk.amadeus.ssh.connectionIdentity
 import kotlinx.coroutines.CancellationException
@@ -18,8 +18,7 @@ import org.json.JSONObject
 data class ReviewBatch(val id: String, val title: String, val total: Int, val reviewed: Int, val lastSaved: Double?)
 
 class ReviewViewModel(application: Application) : AndroidViewModel(application) {
-    private val config = ConfigStore(application)
-    private val keys = SecureKeyStore(application)
+    private val servers = ActiveServerStore(application)
     private val mutableBatches = MutableStateFlow<List<ReviewBatch>>(emptyList())
     val batches = mutableBatches.asStateFlow()
     private val mutableBusy = MutableStateFlow(false)
@@ -32,14 +31,18 @@ class ReviewViewModel(application: Application) : AndroidViewModel(application) 
         mutableBusy.value = true
         viewModelScope.launch {
             try {
-                val connection = config.current()
-                check(keys.hasKey && connection.hasTrustedHost) { "请先在设置中导入私钥并核对服务器指纹。" }
-                val identity = connectionIdentity(connection, keys.revision)
+                val connection = servers.current()
+                check(connection.supports(ServerService.REVIEW)) { "当前服务器未配置审核功能。" }
+                check(connection.hasKey && connection.config.hasTrustedHost) { "请先为当前服务器配置 SSH 私钥并核对主机指纹。" }
+                val identity = connectionIdentity(connection.config, connection.keyRevision)
                 mutableMessage.value = "正在读取审核批次……"
+                val privateKey = servers.readKey(connection)
                 val response = runInterruptible(Dispatchers.IO) {
-                    JSONObject(SshEngine.reviewCenterRequest(connection, keys.read()))
+                    try { JSONObject(SshEngine.reviewCenterRequest(connection.config, privateKey)) }
+                    finally { privateKey.fill(0) }
                 }
-                check(connectionIdentity(config.current(), keys.revision) == identity) { "连接或私钥已变化，请重新刷新。" }
+                val current = servers.current()
+                check(connectionIdentity(current.config, current.keyRevision) == identity) { "当前服务器或私钥已变化，请重新刷新。" }
                 check(response.optString("status") == "ok") { "服务器审核组件尚不可用，请核对版本。" }
                 val rows = response.getJSONObject("data").getJSONArray("batches")
                 mutableBatches.value = List(rows.length()) { index ->

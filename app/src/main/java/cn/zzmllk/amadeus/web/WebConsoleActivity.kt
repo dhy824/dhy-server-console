@@ -233,6 +233,8 @@ class WebConsoleActivity : ComponentActivity() {
                 .putExtra(TunnelService.EXTRA_FORCE_RECONNECT, forceReconnect)
                 .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
                 .putExtra(TunnelService.EXTRA_CPA_PROFILE_ID, intent.getStringExtra(EXTRA_CPA_PROFILE_ID))
+                .putExtra(TunnelService.EXTRA_SERVER_PROFILE_SELECTED, true)
+                .putExtra(TunnelService.EXTRA_SERVER_PROFILE_ID, intent.getStringExtra(EXTRA_SERVER_PROFILE_ID))
         )
     }
 
@@ -292,5 +294,7 @@ class WebConsoleActivity : ComponentActivity() {
         const val EXTRA_URL = "url"
         const val EXTRA_TUNNEL_ACTION = "tunnel_action"
         const val EXTRA_CPA_PROFILE_ID = "cpa_profile_id"
+        const val EXTRA_SERVER_PROFILE_ID = "server_profile_id"
+        const val EXTRA_SERVER_PROFILE_SELECTED = "server_profile_selected"
     }
 }

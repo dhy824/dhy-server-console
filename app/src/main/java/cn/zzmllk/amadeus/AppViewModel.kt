@@ -9,12 +9,15 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cn.zzmllk.amadeus.data.AppConfig
+import cn.zzmllk.amadeus.data.ActiveServerConnection
+import cn.zzmllk.amadeus.data.ActiveServerStore
 import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
 import cn.zzmllk.amadeus.data.CpaProfileStore
 import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.CpaServerProfile
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
+import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.service.TunnelRuntime
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.ssh.HostProbe
@@ -50,7 +53,8 @@ data class ConsoleRequest(
     val title: String,
     val url: String,
     val tunnelAction: String,
-    val cpaProfileId: String? = null
+    val cpaProfileId: String? = null,
+    val serverProfileId: String? = null
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -58,10 +62,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val keyStore = SecureKeyStore(application)
     private val cpaProfileStore = CpaProfileStore(application)
     private val cpaKeyStore = CpaSecureKeyStore(application)
+    private val activeServerStore = ActiveServerStore(application)
 
     val config: StateFlow<AppConfig> = configStore.state
     val cpaProfiles: StateFlow<List<CpaServerProfile>> = cpaProfileStore.profiles
-    val selectedCpaProfileId: StateFlow<String?> = cpaProfileStore.selectedId
+    val activeServerId: StateFlow<String?> = cpaProfileStore.activeServerId
     private val mutableCpaKeys = MutableStateFlow(
         cpaProfileStore.current().filter { cpaKeyStore.hasKey(it.id) }.map { it.id }.toSet()
     )
@@ -86,12 +91,40 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closeSubscriptionLink() { mutableSubscriptionLink.value = null }
 
+    fun activeServer(): ActiveServerConnection = activeServerStore.current()
+
+    fun selectActiveServer(profileId: String?) {
+        try {
+            val previous = activeServerStore.current()
+            val next = activeServerStore.forProfile(profileId)
+            if (previous != next) stopAllTunnels()
+            cpaProfileStore.selectActiveServer(profileId)
+            cpaProfileStore.select(profileId)
+            mutableSubscriptions.value = ""
+            mutableSubscriptionLink.value = null
+            mutableMessage.value = "当前服务器已切换为${activeServerStore.current().name}；连接、命令和后续操作将使用该服务器档案。"
+        } catch (error: Exception) {
+            mutableMessage.value = error.message ?: "无法切换当前服务器。"
+        }
+    }
+
+    private fun readActiveKey(connection: ActiveServerConnection): ByteArray = activeServerStore.readKey(connection)
+
     fun subscriptionAction(request: JSONObject) {
         viewModelScope.launch {
             runBusy(null) {
-                check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
+                val selected = activeServerStore.current()
+                check(selected.supports(ServerService.SUBSCRIPTIONS)) { "当前服务器未配置订阅管理。" }
+                check(selected.hasKey && selected.config.hasTrustedHost) { "请先为当前服务器配置 SSH 私钥并确认主机指纹。" }
+                val identity = cn.zzmllk.amadeus.ssh.connectionIdentity(selected.config, selected.keyRevision)
+                val privateKey = readActiveKey(selected)
                 val reply = runInterruptible(Dispatchers.IO) {
-                    JSONObject(SshEngine.subscriptionRequest(config.value, keyStore.read(), request.toString()))
+                    try { JSONObject(SshEngine.subscriptionRequest(selected.config, privateKey, request.toString())) }
+                    finally { privateKey.fill(0) }
+                }
+                val current = activeServerStore.current()
+                check(cn.zzmllk.amadeus.ssh.connectionIdentity(current.config, current.keyRevision) == identity) {
+                    "当前服务器或私钥已切换，未应用本次订阅操作。"
                 }
                 check(reply.optBoolean("ok")) { reply.optString("error", "订阅操作失败，请刷新状态。") }
                 val data = reply.getJSONObject("data")
@@ -126,13 +159,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val endpointChanged = previous != null &&
             (previous.host != profile.host.trim() || previous.sshPort != profile.sshPort)
         cpaProfileStore.save(profile)
-        if (previous != null) stopCpaTunnel()
+        if (previous != null) {
+            stopCpaTunnel()
+            if (activeServerId.value == profile.id) stopAllTunnels()
+        }
         if (endpointChanged) {
             cpaKeyStore.delete(profile.id)
             mutableCpaKeys.value = mutableCpaKeys.value - profile.id
             mutableMessage.value = "服务器地址已更改，旧密钥已清除；请为新目标生成密钥并登记公钥。"
         } else {
-            mutableMessage.value = "CPA 服务器档案已保存。"
+            mutableMessage.value = "服务器档案已保存。"
         }
         true
     } catch (error: Exception) {
@@ -142,11 +178,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteCpaProfile(profileId: String) {
         try {
+            val wasActive = activeServerId.value == profileId
             cpaProfileStore.delete(profileId)
             stopCpaTunnel()
+            if (wasActive) stopAllTunnels()
             cpaKeyStore.delete(profileId)
             mutableCpaKeys.value = mutableCpaKeys.value - profileId
-            mutableMessage.value = "CPA 服务器档案已删除。"
+            mutableMessage.value = "服务器档案已删除。"
         } catch (error: Exception) {
             mutableMessage.value = error.message ?: "无法删除 CPA 服务器档案。"
         }
@@ -164,6 +202,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
                 mutableCpaKeys.value = mutableCpaKeys.value + profileId
                 stopCpaTunnel()
+                if (activeServerId.value == profileId) stopAllTunnels()
             }
         }
     }
@@ -171,7 +210,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCpaPrivateKey(profileId: String) {
         viewModelScope.launch {
             runBusy("已移除此 CPA 档案的 SSH 私钥。") {
-                stopCpaTunnel()
+                if (activeServerId.value == profileId) stopAllTunnels() else stopCpaTunnel()
                 withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
                 cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
                 mutableCpaKeys.value = mutableCpaKeys.value - profileId
@@ -191,7 +230,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 cpaProfileStore.save(checkedProfile.copy(publicKey = publicKey))
                 mutableCpaKeys.value = mutableCpaKeys.value + profileId
-                stopCpaTunnel()
+                if (activeServerId.value == profileId) stopAllTunnels() else stopCpaTunnel()
                 mutableMessage.value = "手机密钥已生成并加密保存。公钥已显示；服务器登记前尚不能用它登录。"
             }
         }
@@ -210,15 +249,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         clipboard.setPrimaryClip(ClipData.newPlainText("CPA SSH 公钥", publicKey))
         mutableMessage.value = "已复制公钥。私钥仍保留在手机加密存储中。"
-    }
-
-    fun selectCpaProfile(profileId: String?) {
-        try {
-            if (selectedCpaProfileId.value != profileId) stopCpaTunnel()
-            cpaProfileStore.select(profileId)
-        } catch (error: Exception) {
-            mutableMessage.value = error.message ?: "无法选择 CPA 服务器档案。"
-        }
     }
 
     fun importPrivateKey(uri: Uri) {
@@ -246,15 +276,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun testConnection() {
+        activeServerId.value?.let { profileId ->
+            testCpaProfile(profileId)
+            return
+        }
         viewModelScope.launch {
             runBusy(null) {
-                check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
-                val checkedConfig = config.value
-                val probe = runInterruptible(Dispatchers.IO) { SshEngine.probe(checkedConfig, keyStore.read()) }
-                check(checkedConfig.host == config.value.host && checkedConfig.sshPort == config.value.sshPort) { "连接设置已变化，请重新测试主机指纹。" }
+                val selected = activeServerStore.current()
+                check(selected.profileId == null && selected.hasKey) { "请先为默认服务器导入 SSH 私钥。" }
+                val privateKey = readActiveKey(selected)
+                val probe = runInterruptible(Dispatchers.IO) {
+                    try { SshEngine.probe(selected.config, privateKey) }
+                    finally { privateKey.fill(0) }
+                }
+                check(activeServerStore.current() == selected) { "当前服务器或连接设置已变化，请重新测试主机指纹。" }
                 pendingCpaProfile = null
-                mutableFingerprintTarget.value = "当前 SSH 连接"
-                pendingProbeConfig = checkedConfig
+                mutableFingerprintTarget.value = "默认服务器 SSH 连接"
+                pendingProbeConfig = selected.config
                 pendingProbe = probe
                 mutableFingerprint.value = probe.fingerprint
             }
@@ -264,16 +302,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun testCpaProfile(profileId: String) {
         viewModelScope.launch {
             runBusy(null) {
+                check(activeServerStore.current().profileId == profileId) { "请先在设置中切换到要测试的服务器。" }
                 val checkedProfile = cpaProfileStore.find(profileId) ?: error("CPA 服务器档案已删除，请刷新后重试。")
-                check(cpaKeyStore.hasKey(profileId)) { "请先为此 CPA 档案单独导入 SSH 私钥。" }
+                val selected = activeServerStore.current()
+                check(selected.hasKey) { "请先为当前服务器导入 SSH 私钥。" }
+                val privateKey = activeServerStore.readKey(selected)
                 val probe = runInterruptible(Dispatchers.IO) {
-                    SshEngine.probe(checkedProfile.toAppConfig(), cpaKeyStore.read(profileId))
+                    try { SshEngine.probe(selected.config, privateKey) }
+                    finally { privateKey.fill(0) }
                 }
-                check(cpaProfileStore.find(profileId) == checkedProfile) { "CPA 服务器档案已变化，请重新测试主机指纹。" }
+                check(activeServerStore.current() == selected && cpaProfileStore.find(profileId) == checkedProfile) {
+                    "当前服务器或连接设置已变化，请重新测试主机指纹。"
+                }
                 pendingProbeConfig = null
                 pendingCpaProfile = checkedProfile
                 pendingProbe = probe
-                mutableFingerprintTarget.value = "CPA 档案：${checkedProfile.name}"
+                mutableFingerprintTarget.value = "服务器：${checkedProfile.name}"
                 mutableFingerprint.value = probe.fingerprint
             }
         }
@@ -292,7 +336,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             pendingProbe = null
             pendingCpaProfile = null
             mutableFingerprint.value = null
-            mutableMessage.value = "CPA 服务器主机指纹已固定，后续连接会严格校验。"
+            mutableMessage.value = "服务器主机指纹已固定，后续连接会严格校验。"
             return
         }
         val checkedConfig = pendingProbeConfig
@@ -317,9 +361,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openCpaConsole(profileId: String?) {
         viewModelScope.launch {
             runBusy(null) {
-                check(profileId != null) { "请先在设置中添加并选择 CPA 服务器档案。" }
+                check(profileId != null) { "当前选择的是默认服务器；请先在设置中选择需要打开 CPA 控制台的服务器。" }
+                val selected = activeServerStore.current()
+                check(selected.profileId == profileId) { "当前服务器已切换，请重新打开控制台。" }
+                check(selected.supports(ServerService.CPA)) { "当前服务器未配置 CPA 控制台。" }
                 val profile = cpaProfileStore.find(profileId) ?: error("所选 CPA 服务器档案不存在。")
-                check(cpaKeyStore.hasKey(profileId)) { "请先为此 CPA 档案单独导入 SSH 私钥。" }
+                check(selected.hasKey) { "请先为当前服务器配置 SSH 私钥。" }
                 check(profile.hasTrustedHost) { "请先测试此 CPA 档案并核对、确认服务器指纹。" }
                 val requestId = UUID.randomUUID().toString()
                 ContextCompat.startForegroundService(
@@ -328,6 +375,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         .setAction(TunnelService.ACTION_START_CPA)
                         .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
                         .putExtra(TunnelService.EXTRA_CPA_PROFILE_ID, profile.id)
+                        .putExtra(TunnelService.EXTRA_SERVER_PROFILE_SELECTED, true)
+                        .putExtra(TunnelService.EXTRA_SERVER_PROFILE_ID, selected.profileId)
                 )
                 val state = withTimeout(35_000) {
                     TunnelRuntime.state.first { current ->
@@ -342,7 +391,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         "CPA 插件控制台 · ${profile.name}",
                         "http://${state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")}:$localPort$CPA_CONSOLE_PATH",
                         TunnelService.ACTION_START_CPA,
-                        profile.id
+                        cpaProfileId = profile.id,
+                        serverProfileId = selected.profileId
                     )
                 )
             }
@@ -358,8 +408,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun open(target: ConsoleTarget, analysis: Boolean = false, review: Boolean = false) {
         viewModelScope.launch {
             runBusy(null) {
-                check(keyStore.hasKey) { "请先在设置中导入 SSH 私钥。" }
-                check(config.value.hasTrustedHost) { "请先在设置中测试连接并确认主机指纹。" }
+                val selected = activeServerStore.current()
+                val requiredService = when (target) {
+                    ConsoleTarget.API -> ServerService.API
+                    ConsoleTarget.ASTRBOT -> when {
+                        review -> ServerService.REVIEW
+                        analysis -> ServerService.DISTILLATION
+                        else -> ServerService.ASTRBOT
+                    }
+                    ConsoleTarget.ZAKO -> ServerService.ZAKO
+                }
+                check(selected.supports(requiredService)) { "当前服务器未配置${requiredService.displayName}。" }
+                check(selected.hasKey) { "请先为当前服务器配置 SSH 私钥。" }
+                check(selected.config.hasTrustedHost) { "请先测试当前服务器并确认主机指纹。" }
                 val requestId = UUID.randomUUID().toString()
                 val action = when (target) {
                     ConsoleTarget.API -> TunnelService.ACTION_START_API
@@ -370,6 +431,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication(),
                     Intent(getApplication(), TunnelService::class.java).setAction(action)
                         .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
+                        .putExtra(TunnelService.EXTRA_SERVER_PROFILE_SELECTED, true)
+                        .putExtra(TunnelService.EXTRA_SERVER_PROFILE_ID, selected.profileId)
                 )
                 val tunnelState = withTimeout(35_000) {
                     TunnelRuntime.state.first { state ->
@@ -381,19 +444,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 tunnelState.error?.let { error(it) }
+                check(activeServerStore.current() == selected) { "当前服务器已切换，请重新打开目标页面。" }
                 val request = when (target) {
                     ConsoleTarget.API -> ConsoleRequest(
-                        "反代 API 管理",
-                        "http://127.0.0.1:${config.value.apiLocalPort}/management.html", action
+                        "反代 API 管理 · ${selected.name}",
+                        "http://${selected.localHost}:${selected.config.apiLocalPort}/management.html", action,
+                        serverProfileId = selected.profileId
                     )
                     ConsoleTarget.ASTRBOT -> ConsoleRequest(
-                        if (review) "AstrBot 审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台",
-                        "http://127.0.0.1:${config.value.astrBotLocalPort}" + (if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""), action
+                        (if (review) "AstrBot 审核中心" else if (analysis) "AstrBot 蒸馏中心" else "AstrBot 控制台") + " · ${selected.name}",
+                        "http://${selected.localHost}:${selected.config.astrBotLocalPort}" + (if (review) REVIEW_ROUTE else if (analysis) DISTILLATION_ROUTE else ""), action,
+                        serverProfileId = selected.profileId
                     )
                     ConsoleTarget.ZAKO -> ConsoleRequest(
-                        "Zako WebUI",
-                        "http://127.0.0.1:${tunnelState.zakoLocalPort ?: error("Zako 本地端口未建立。")}/",
-                        action
+                        "Zako WebUI · ${selected.name}",
+                        "http://${selected.localHost}:${tunnelState.zakoLocalPort ?: error("Zako 本地端口未建立。")}/",
+                        action,
+                        serverProfileId = selected.profileId
                     )
                 }
                 mutableOpenConsole.emit(request)
@@ -404,10 +471,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun runSpeedTest() {
         viewModelScope.launch {
             runBusy("节点测速流程已完成，请在终端查看各组结果。") {
-                check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
+                val selected = activeServerStore.current()
+                check(selected.supports(ServerService.SPEED_TEST)) { "当前服务器未配置节点测速。" }
+                check(selected.hasKey && selected.config.hasTrustedHost) { "请先为当前服务器配置 SSH 私钥并确认主机指纹。" }
+                val privateKey = readActiveKey(selected)
                 val output = runInterruptible(Dispatchers.IO) {
-                    SshEngine.runCommand(config.value, keyStore.read(), "/usr/local/sbin/mihomo-auto force")
+                    try { SshEngine.runCommand(selected.config, privateKey, "/usr/local/sbin/mihomo-auto force") }
+                    finally { privateKey.fill(0) }
                 }
+                check(activeServerStore.current() == selected) { "当前服务器已切换，测速结果未应用。" }
                 appendTerminal("节点测速", output)
             }
         }
@@ -416,10 +488,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun runTerminalCommand(command: String) {
         viewModelScope.launch {
             runBusy(null) {
-                check(keyStore.hasKey) { "请先导入 SSH 私钥。" }
+                val selected = activeServerStore.current()
+                check(selected.supports(ServerService.TERMINAL)) { "当前服务器未配置终端入口。" }
+                check(selected.hasKey && selected.config.hasTrustedHost) { "请先为当前服务器配置 SSH 私钥并确认主机指纹。" }
+                val privateKey = readActiveKey(selected)
                 val output = runInterruptible(Dispatchers.IO) {
-                    SshEngine.runCommand(config.value, keyStore.read(), command)
+                    try { SshEngine.runCommand(selected.config, privateKey, command) }
+                    finally { privateKey.fill(0) }
                 }
+                check(activeServerStore.current() == selected) { "当前服务器已切换，命令结果未应用。" }
                 appendTerminal(command, output)
             }
         }
