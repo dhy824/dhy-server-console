@@ -9,8 +9,9 @@ import javax.crypto.SecretKey
 const val LEGACY_IDENTITY_ALIAS = "amadeus_ssh_identity_v1"
 private const val IDENTITY_MAGIC = 0x414d4b32
 const val MAX_IDENTITY_PAYLOAD = 1_048_768
-private val CURRENT_ALIAS = Regex("amadeus_ssh_identity_v2_[a-f0-9]{32}")
-fun ownedIdentityAlias(alias: String) = alias == LEGACY_IDENTITY_ALIAS || CURRENT_ALIAS.matches(alias)
+private val CURRENT_ALIAS = Regex("(?:amadeus_ssh_identity_v2_|amadeus_cpa_ssh_v1_)[a-f0-9]{32}")
+fun ownedIdentityAlias(alias: String) = alias == LEGACY_IDENTITY_ALIAS || alias.matches(Regex("amadeus_ssh_identity_v2_[a-f0-9]{32}"))
+fun ownedCpaIdentityAlias(alias: String) = alias.matches(Regex("amadeus_cpa_ssh_v1_[a-f0-9]{32}"))
 
 class IdentityKeyException(message: String, val retryable: Boolean = false, cause: Throwable? = null) :
     IllegalStateException(message, cause)

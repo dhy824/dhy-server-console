@@ -22,6 +22,19 @@ class TunnelHealthTest {
         try { tunnelHttpReady(server.localPort, if (status == 0) 150 else 2_000) } finally { worker.join(2_000) }
     }
 
+    private fun status(portStatus: Int): Int? = ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { server ->
+        val worker = thread {
+            server.accept().use { socket ->
+                socket.soTimeout = 2_000
+                val reader = socket.getInputStream().bufferedReader()
+                while (!reader.readLine().isNullOrEmpty()) { }
+                socket.getOutputStream().write("HTTP/1.1 $portStatus Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+            }
+        }
+        try { tunnelHttpStatus(server.localPort, "/v0/resource/plugins/freetier/console", 2_000) }
+        finally { worker.join(2_000) }
+    }
+
     @Test fun actualPageAndLoginChallengeAreReachable() {
         assertTrue(probe(200))
         assertTrue(probe(401))
@@ -36,6 +49,14 @@ class TunnelHealthTest {
         assertFalse(probe(0))
         assertFalse(probe(503))
         assertFalse(tunnelHttpReady(0))
+    }
+
+    @Test fun cpaPluginConsoleRequiresExactHttp200() {
+        assertTrue(cpaConsoleResponseOk(status(200)))
+        assertFalse(cpaConsoleResponseOk(status(302)))
+        assertFalse(cpaConsoleResponseOk(status(401)))
+        assertFalse(cpaConsoleResponseOk(status(503)))
+        assertFalse(cpaConsoleResponseOk(null))
     }
 
     @Test fun failuresKeepStageAndCauseWithoutLeakingConnectionValues() {

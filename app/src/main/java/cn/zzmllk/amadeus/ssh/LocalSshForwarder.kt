@@ -18,13 +18,14 @@ import java.util.concurrent.atomic.AtomicInteger
 class LocalSshForwarder(
     private val session: Session,
     private val remoteHost: String,
-    private val remotePort: Int
+    private val remotePort: Int,
+    private val localHost: String = "127.0.0.1"
 ) : AutoCloseable {
     private val threadId = AtomicInteger(0)
     private val workers = Executors.newCachedThreadPool(ThreadFactory { runnable ->
         Thread(runnable, "amadeus-zako-forward-${threadId.incrementAndGet()}").apply { isDaemon = true }
     })
-    private val listener = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
+    private val listener = ServerSocket(0, 16, InetAddress.getByName(localHost))
     @Volatile private var closed = false
     @Volatile var lastErrorType: String? = null
 

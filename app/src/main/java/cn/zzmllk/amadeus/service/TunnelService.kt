@@ -10,12 +10,17 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import cn.zzmllk.amadeus.MainActivity
 import cn.zzmllk.amadeus.R
+import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
+import cn.zzmllk.amadeus.data.CpaProfileStore
+import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.ssh.SshEngine
 import cn.zzmllk.amadeus.ssh.connectionIdentity
 import cn.zzmllk.amadeus.ssh.LocalSshForwarder
 import cn.zzmllk.amadeus.ssh.tunnelHttpReady
+import cn.zzmllk.amadeus.ssh.tunnelHttpStatus
+import cn.zzmllk.amadeus.ssh.cpaConsoleResponseOk
 import cn.zzmllk.amadeus.ssh.tunnelFailure
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +35,10 @@ data class TunnelState(
     val astrBotActive: Boolean = false,
     val zakoActive: Boolean = false,
     val zakoLocalPort: Int? = null,
+    val cpaActive: Boolean = false,
+    val cpaLocalPort: Int? = null,
+    val cpaProfileId: String? = null,
+    val cpaLocalHost: String? = null,
     val message: String = "隧道未启动",
     val error: String? = null,
     val requestId: String = ""
@@ -46,6 +55,8 @@ class TunnelService : Service() {
     private val sessionLock = Any()
     @Volatile private var destroyed = false
     private lateinit var configStore: ConfigStore
+    private lateinit var cpaProfileStore: CpaProfileStore
+    private lateinit var cpaKeyStore: CpaSecureKeyStore
     private lateinit var keyStore: SecureKeyStore
     private var session: Session? = null
     private var connectionSignature = ""
@@ -53,10 +64,16 @@ class TunnelService : Service() {
     private var astrBotForwardPort: Int? = null
     private var zakoForwardPort: Int? = null
     private var zakoForwarder: LocalSshForwarder? = null
+    private var cpaSession: Session? = null
+    private var cpaConnectionSignature = ""
+    private var cpaProfileId: String? = null
+    private var cpaForwarder: LocalSshForwarder? = null
 
     override fun onCreate() {
         super.onCreate()
         configStore = ConfigStore(this)
+        cpaProfileStore = CpaProfileStore(this)
+        cpaKeyStore = CpaSecureKeyStore(this)
         keyStore = SecureKeyStore(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, notification("准备安全隧道……"))
@@ -71,6 +88,11 @@ class TunnelService : Service() {
             ACTION_START_API -> executor.execute { startTunnel(Target.API, forceReconnect, requestId) }
             ACTION_START_ASTRBOT -> executor.execute { startTunnel(Target.ASTRBOT, forceReconnect, requestId) }
             ACTION_START_ZAKO -> executor.execute { startTunnel(Target.ZAKO, forceReconnect, requestId) }
+            ACTION_START_CPA -> executor.execute {
+                startCpaTunnel(intent?.getStringExtra(EXTRA_CPA_PROFILE_ID).orEmpty(), requestId)
+            }
+            ACTION_STOP_CPA -> executor.execute { stopCpaTunnel() }
+            ACTION_STOP_DEFAULT -> executor.execute { stopDefaultTunnels() }
             ACTION_STOP_ALL -> executor.execute { stopAll("隧道已停止") }
         }
         return START_NOT_STICKY
@@ -82,6 +104,7 @@ class TunnelService : Service() {
         synchronized(sessionLock) {
             destroyed = true
             disconnectSession()
+            disconnectCpaSession()
             TunnelRuntime.update(TunnelState())
         }
         executor.shutdownNow()
@@ -143,6 +166,10 @@ class TunnelService : Service() {
                 apiActive = apiForwardPort != null,
                 astrBotActive = astrBotForwardPort != null,
                 zakoActive = zakoForwardPort != null,
+                cpaActive = cpaForwarder?.isOpen == true,
+                cpaLocalPort = cpaForwarder?.localPort,
+                cpaProfileId = cpaProfileId,
+                cpaLocalHost = cpaProfileId?.let(cpaProfileStore::find)?.localHost,
                 message = listOfNotNull(
                     "API".takeIf { apiForwardPort != null },
                     "AstrBot".takeIf { astrBotForwardPort != null },
@@ -158,7 +185,16 @@ class TunnelService : Service() {
                 "目标页面未响应。" -> "SSH 已连接，但目标页面未响应；请检查服务器服务或网络后重新打开。"
                 else -> tunnelFailure(error, phase)
             }
-            publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
+            publish(previous.copy(
+                connecting = false,
+                apiActive = false,
+                astrBotActive = false,
+                zakoActive = false,
+                zakoLocalPort = null,
+                error = message,
+                message = "连接失败：$message",
+                requestId = requestId
+            ))
         }
     }
 
@@ -205,6 +241,10 @@ class TunnelService : Service() {
                 astrBotActive = astrBotForwardPort != null,
                 zakoActive = true,
                 zakoLocalPort = localPort,
+                cpaActive = cpaForwarder?.isOpen == true,
+                cpaLocalPort = cpaForwarder?.localPort,
+                cpaProfileId = cpaProfileId,
+                cpaLocalHost = cpaProfileId?.let(cpaProfileStore::find)?.localHost,
                 message = "Zako SSH 转发已建立"
             ))
         } catch (error: Exception) {
@@ -215,12 +255,135 @@ class TunnelService : Service() {
                 "Zako 本地转发已建立，但网页未响应。" -> error.message!!
                 else -> error.message?.takeIf { it.startsWith("Zako SSH 直连通道失败（") } ?: tunnelFailure(error, phase)
             }
-            publish(TunnelState(error = message, message = "连接失败：$message", requestId = requestId))
+            publish(previous.copy(
+                connecting = false,
+                apiActive = false,
+                astrBotActive = false,
+                zakoActive = false,
+                zakoLocalPort = null,
+                error = message,
+                message = "连接失败：$message",
+                requestId = requestId
+            ))
         }
+    }
+
+    private fun startCpaTunnel(profileId: String, requestId: String) {
+        if (destroyed) return
+        val previous = TunnelRuntime.state.value
+        publish(previous.copy(connecting = true, error = null, requestId = requestId, message = "正在建立 CPA 独立 SSH 转发……"))
+        var phase = "检查 CPA 服务器档案"
+        try {
+            val profile = cpaProfileStore.find(profileId) ?: error("所选 CPA 服务器档案不存在。")
+            check(cpaKeyStore.hasKey(profileId)) { "尚未为此 CPA 档案导入 SSH 私钥。" }
+            check(profile.hasTrustedHost) { "请先测试此 CPA 档案并确认服务器主机指纹。" }
+            check(profile.localHostOctet != null) { "CPA 档案回环地址尚未分配，请编辑并保存档案后重试。" }
+            val signature = connectionIdentity(profile.toAppConfig(), cpaKeyStore.revision(profileId))
+            val reusable = cpaProfileId == profile.id && cpaSession?.isConnected == true &&
+                cpaConnectionSignature == signature && cpaForwarder?.isOpen == true &&
+                cpaConsoleResponseOk(cpaForwarder?.localPort?.let {
+                    tunnelHttpStatus(it, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, profile.localHost)
+                })
+            if (!reusable) {
+                disconnectCpaSession()
+                phase = "读取手机中的 SSH 私钥"
+                val privateKey = cpaKeyStore.read(profileId)
+                phase = "CPA SSH 身份验证与主机校验"
+                val created = try { SshEngine.connect(profile.toAppConfig(), privateKey) }
+                finally { privateKey.fill(0) }
+                if (destroyed) { created.disconnect(); return }
+                cpaSession = created
+                cpaConnectionSignature = signature
+                cpaProfileId = profile.id
+                phase = "建立 CPA 动态本机转发"
+                cpaForwarder = LocalSshForwarder(created, "127.0.0.1", 8317, profile.localHost)
+            }
+            val localPort = cpaForwarder?.localPort ?: error("CPA 本机回环转发未建立。")
+            phase = "检查 FreeTier2API 插件控制台"
+            val status = waitForCpaConsole(localPort, profile.localHost)
+            check(cpaConsoleResponseOk(status)) {
+                if (status == null) "CPA SSH 转发已建立，但插件控制台无 HTTP 响应。"
+                else "FreeTier2API 插件控制台返回 HTTP $status；仅 HTTP 200 时允许打开。"
+            }
+            publish(previous.copy(
+                requestId = requestId,
+                connecting = false,
+                cpaActive = true,
+                cpaLocalPort = localPort,
+                cpaProfileId = profile.id,
+                cpaLocalHost = cpaProfileId?.let(cpaProfileStore::find)?.localHost,
+                message = "CPA 插件控制台通道已就绪：${profile.name}"
+            ))
+        } catch (error: Exception) {
+            disconnectCpaSession()
+            if (destroyed) return
+            val message = when (error.message) {
+                "尚未导入 SSH 私钥。", "请先测试此 CPA 档案并确认服务器主机指纹。",
+                "所选 CPA 服务器档案不存在。", "CPA SSH 转发已建立，但插件控制台无 HTTP 响应。" -> error.message!!
+                else -> error.message?.takeIf { it.startsWith("FreeTier2API 插件控制台返回 HTTP ") }
+                    ?: tunnelFailure(error, phase)
+            }
+            publish(previous.copy(
+                connecting = false,
+                error = message,
+                cpaActive = false,
+                cpaLocalPort = null,
+                cpaProfileId = profileId,
+                cpaLocalHost = cpaProfileId?.let(cpaProfileStore::find)?.localHost,
+                message = "CPA 连接失败：$message",
+                requestId = requestId
+            ))
+        }
+    }
+
+    private fun stopCpaTunnel() {
+        disconnectCpaSession()
+        val previous = TunnelRuntime.state.value
+        publish(previous.copy(
+            connecting = false,
+            cpaActive = false,
+            cpaLocalPort = null,
+            cpaProfileId = null,
+            cpaLocalHost = null,
+            error = null,
+            message = if (previous.apiActive || previous.astrBotActive || previous.zakoActive) "CPA 通道已停止，其他通道保持运行" else "CPA 通道已停止"
+        ))
+        if (!previous.apiActive && !previous.astrBotActive && !previous.zakoActive) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    private fun stopDefaultTunnels() {
+        disconnectSession()
+        val previous = TunnelRuntime.state.value
+        publish(previous.copy(
+            connecting = false,
+            apiActive = false,
+            astrBotActive = false,
+            zakoActive = false,
+            zakoLocalPort = null,
+            error = null,
+            message = if (previous.cpaActive) "默认 SSH 通道已停止，CPA 通道保持运行" else "默认 SSH 通道已停止"
+        ))
+        if (!previous.cpaActive) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    private fun waitForCpaConsole(port: Int, localHost: String): Int? {
+        repeat(CPA_PROBE_ATTEMPTS) { attempt ->
+            val status = tunnelHttpStatus(port, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, localHost)
+            if (status != null) return status
+            if (attempt + 1 < CPA_PROBE_ATTEMPTS) Thread.sleep(CPA_PROBE_INTERVAL_MS)
+        }
+        return null
     }
 
     private fun stopAll(message: String) {
         disconnectSession()
+        disconnectCpaSession()
         publish(TunnelState(message = message))
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -237,14 +400,45 @@ class TunnelService : Service() {
         zakoForwardPort = null
     }
 
+    private fun disconnectCpaSession() {
+        try { cpaForwarder?.close() } catch (_: Exception) { }
+        cpaForwarder = null
+        try { cpaSession?.disconnect() } catch (_: Exception) { }
+        cpaSession = null
+        cpaConnectionSignature = ""
+        cpaProfileId = null
+    }
+
     private fun refreshConnectionState() {
-        if (destroyed || session == null) return
+        if (destroyed || session == null && cpaSession == null) return
         try {
-            if (session?.isConnected == true && connectionSignature == connectionIdentity(configStore.current(), keyStore.revision) && activePagesReady()) return
+            val normalHealthy = session == null || session?.isConnected == true &&
+                connectionSignature == connectionIdentity(configStore.current(), keyStore.revision) && activePagesReady()
+            val cpaProfile = cpaProfileId?.let(cpaProfileStore::find)
+            val cpaHealthy = cpaSession == null || cpaProfile != null && cpaSession?.isConnected == true &&
+                cpaConnectionSignature == connectionIdentity(cpaProfile.toAppConfig(), cpaKeyStore.revision(cpaProfile.id)) &&
+                cpaForwarder?.isOpen == true && cpaForwarder?.localPort?.let {
+                    cpaProfile.localHostOctet != null && cpaConsoleResponseOk(
+                        tunnelHttpStatus(it, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, cpaProfile.localHost)
+                    )
+                } == true
+            if (normalHealthy && cpaHealthy) return
+            if (!normalHealthy) disconnectSession()
+            if (!cpaHealthy) disconnectCpaSession()
         } catch (_: Exception) { }
-        disconnectSession()
+        val previous = TunnelRuntime.state.value
         val message = "通道已断开、页面未响应或连接设置已变化，请重新打开通道。"
-        publish(TunnelState(message = message, error = message))
+        publish(previous.copy(
+            apiActive = session?.isConnected == true && apiForwardPort != null,
+            astrBotActive = session?.isConnected == true && astrBotForwardPort != null,
+            zakoActive = session?.isConnected == true && zakoForwardPort != null,
+            zakoLocalPort = zakoForwardPort,
+            cpaActive = cpaSession?.isConnected == true && cpaForwarder?.isOpen == true,
+            cpaLocalPort = cpaForwarder?.localPort,
+            cpaLocalHost = cpaProfileId?.let(cpaProfileStore::find)?.localHost,
+            error = message,
+            message = message
+        ))
     }
 
     private fun activePagesReady(): Boolean =
@@ -320,12 +514,19 @@ class TunnelService : Service() {
         const val ACTION_START_ASTRBOT = "cn.zzmllk.amadeus.START_ASTRBOT"
         const val ZAKO_LOCAL_PORT = 11990
         const val ACTION_START_ZAKO = "cn.zzmllk.amadeus.START_ZAKO"
+        const val ACTION_START_CPA = "cn.zzmllk.amadeus.START_CPA"
+        const val ACTION_STOP_CPA = "cn.zzmllk.amadeus.STOP_CPA"
+        const val ACTION_STOP_DEFAULT = "cn.zzmllk.amadeus.STOP_DEFAULT"
         const val ACTION_STOP_ALL = "cn.zzmllk.amadeus.STOP_ALL"
         const val EXTRA_FORCE_RECONNECT = "force_reconnect"
         const val EXTRA_REQUEST_ID = "request_id"
+        const val EXTRA_CPA_PROFILE_ID = "cpa_profile_id"
         private const val ZAKO_PROBE_TIMEOUT_MS = 1_500
         private const val ZAKO_PROBE_INTERVAL_MS = 250L
         private const val ZAKO_PROBE_ATTEMPTS = 8
+        private const val CPA_PROBE_TIMEOUT_MS = 1_500
+        private const val CPA_PROBE_INTERVAL_MS = 250L
+        private const val CPA_PROBE_ATTEMPTS = 8
         private const val CHANNEL_ID = "amadeus_tunnels"
         private const val NOTIFICATION_ID = 8317
     }

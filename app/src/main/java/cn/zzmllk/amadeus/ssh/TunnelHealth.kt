@@ -7,8 +7,18 @@ import cn.zzmllk.amadeus.data.IdentityKeyException
 
 /** Probe fixed loopback HTTP services without Android proxy or cleartext-policy mediation. */
 fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): Boolean {
-    if (port !in 1024..65535) return false
-    if (!path.startsWith("/") || path.contains("..") || path.any { it.isISOControl() || it == '\\' }) return false
+    return tunnelHttpStatus(port, path, timeoutMillis)?.let { it in 200..499 } == true
+}
+
+fun tunnelHttpStatus(
+    port: Int,
+    path: String = "/",
+    timeoutMillis: Int = 1_500,
+    loopbackHost: String = "127.0.0.1"
+): Int? {
+    if (port !in 1024..65535) return null
+    if (!loopbackHost.matches(Regex("^127\\.0\\.0\\.(?:[1-9]|1[0-7])$"))) return null
+    if (!path.startsWith("/") || path.contains("..") || path.any { it.isISOControl() || it == '\\' }) return null
     var socket: Socket? = null
     return try {
         // Android's direct Socket constructor is more reliable for loopback probes than
@@ -17,21 +27,22 @@ fun tunnelHttpReady(port: Int, path: String = "/", timeoutMillis: Int = 1_500): 
         socket = Socket()
         socket.tcpNoDelay = true
         socket.soTimeout = timeoutMillis
-        socket.connect(InetSocketAddress("127.0.0.1", port), timeoutMillis)
-        val request = "GET $path HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+        socket.connect(InetSocketAddress(loopbackHost, port), timeoutMillis)
+        val request = "GET $path HTTP/1.1\r\nHost: $loopbackHost\r\nConnection: close\r\n\r\n"
         socket.getOutputStream().apply {
             write(request.toByteArray(Charsets.US_ASCII))
             flush()
         }
         val statusLine = socket.getInputStream().bufferedReader(Charsets.ISO_8859_1).readLine()
-        val status = statusLine?.split(" ", limit = 3)?.getOrNull(1)?.toIntOrNull()
-        status in 200..499
+        statusLine?.split(" ", limit = 3)?.getOrNull(1)?.toIntOrNull()
     } catch (_: Exception) {
-        false
+        null
     } finally {
         try { socket?.close() } catch (_: Exception) { }
     }
 }
+
+fun cpaConsoleResponseOk(status: Int?): Boolean = status == 200
 
 /** Backward-compatible overload for existing callers that pass only a timeout. */
 fun tunnelHttpReady(port: Int, timeoutMillis: Int): Boolean = tunnelHttpReady(port, "/", timeoutMillis)

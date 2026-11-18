@@ -85,7 +85,7 @@ internal fun UpdatesContent(
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text("更新中心", style = MaterialTheme.typography.titleMedium)
-                        Text("4 个项目 · 每次升级单独确认", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+                        Text("5 个项目 · 每次升级单独确认", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
                 Spacer(Modifier.height(18.dp))
@@ -133,6 +133,7 @@ internal fun UpdatesContent(
                         "mihomo" -> Icons.Rounded.Speed
                         "nginx" -> Icons.Rounded.Language
                         "cliproxyapi" -> Icons.Rounded.Api
+                        "zako" -> Icons.Rounded.Security
                         else -> Icons.Rounded.Memory
                     })
                     Spacer(Modifier.width(14.dp))
@@ -142,6 +143,7 @@ internal fun UpdatesContent(
                             "mihomo" -> "代理与网络"
                             "nginx" -> "网站与 API 入口"
                             "cliproxyapi" -> "反代 API 服务"
+                            "zako" -> "破甲 API 容器"
                             else -> "机器人平台"
                         }, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
                     }

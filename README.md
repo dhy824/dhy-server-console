@@ -1,6 +1,8 @@
-# 2026-11-12 Zako 动态本地转发修复与首页审核入口 1.4.17（已正式发布）
+# 2026-11-18 Android CPA 独立服务器选择器 1.4.20
 
-当前维护源码1.4.18/versionCode33。Release/Lint/JVM、Public默认值和原签名连续性检查通过，Release/Lint/JVM、Public默认值和原签名连续性检查通过，APK SHA-256为`602020b534e88fd5e3a98cf3315a14030ca6d8afd4236950e9b6e7ab957c0af5`，GitHub Actions 43245236431成功，实际下载APK摘要与本地一致。Release/Lint/JVM、Public默认值和原签名连续性检查通过，APK SHA-256为`fa646e1467430e7445d86b6046dc2e977b59fb3a1c7873e1aaa83b56db4c8e4a`，GitHub Actions 43258330007成功，实际下载APK摘要与本地一致。本版本改为在电脑端验证通道流顺序后，修正为先初始化 JSch 输入输出流再 connect，避免 Android 抛出 JSchException。，实际下载APK摘要与本地一致。Zako独立启动流程改为由SSH分配临时本机端口，建立后从同一进程直接探测根页面，再把实际端口传给WebView；本次进一步改用Android直接Socket探测，避开Proxy.NO_PROXY兼容差异，避免固定11990端口冲突或转发尚未就绪导致ERR_CONNECTION_RESET；系统浏览器入口也等待本次SSH隧道状态。首页审核入口仅显示“打开审核中心”按钮，不查询或展示审核批次条目，底栏保留原五项。服务器未改，真机安装与网络交互待验证。
+源码版本1.4.20/versionCode35新增独立 CPA 服务器档案选择器。每个档案使用单独加密的 SSH 私钥、独立固定的主机指纹和不可复用的本机回环来源；只转发所选服务器的回环 8317，固定插件路径返回 HTTP 200 后才打开。默认 SSH 连接、服务器配置、DNS 和公网入口保持不变。Public Release/Lint/36项JVM测试、空默认地址与原签名连续性通过；APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。GitHub Actions 会重组 APK、复核校验和后发布 APK 与许可附件；Android 真机和目标服务器连接仍待用户验收。
+
+# 2026-11-12 Zako 动态本地转发修复与首页审核入口 1.4.17（已正式发布）
 
 # 2026-10-22 审核中心自动刷新适配 1.4.7（已正式发布）
 
@@ -42,7 +44,15 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 # Android 服务器控制台
 
-维护版本 1.4.5（versionCode 20），Jetpack Compose + SSH。支持 API/AstrBot 回环隧道、WebView、单命令终端、Mihomo 管理与项目更新。第一次使用需填写连接设置、导入自己的 SSH 私钥并核实服务器主机密钥。
+源码版本 1.4.20（versionCode 35）。Jetpack Compose + SSH，支持 API/AstrBot/Zako 和独立 CPA 控制台回环隧道、单命令终端、Mihomo 管理与项目更新。CPA 档案与默认 SSH 目标互相独立。
+
+## CPA 服务器档案
+
+在“设置 → CPA 服务器”中新增档案，填写名称、SSH 地址、端口和用户名，再为每个档案单独导入 SSH 私钥。点击“测试并确认主机指纹”后，应先通过可信来源核对显示的 SHA-256 指纹，再确认固定。回到“总览”，选择服务器档案并打开 FreeTier2API 控制台。
+
+每个档案的私钥以 Android Keystore 单独加密；删除档案会移除其档案数据、固定指纹和专用私钥，但不影响默认 SSH 私钥。服务器地址/端口修改会清除该档案旧指纹并更换其回环来源，必须重新核对。不同档案使用不同的 `127.0.0.x` 回环来源以隔离 WebView Cookie，删除或更换端点后旧来源不复用。应用仅通过 SSH 把所选服务器的 `127.0.0.1:8317` 转到手机回环，并打开固定 `/v0/resource/plugins/freetier/console` 路径；页面必须 HTTP 200 才算就绪。没有公网监听或 DNS 变更。
+
+1.4.20 的 Release、Lint、36 项 JVM 测试、Public 空地址、非调试标记及原签名连续性均通过；APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。GitHub 发行由 `.github/workflows/publish-release-v1.4.20.yml` 重组 APK、校验 APK/许可附件和验收数据后完成。Android 真机安装与目标服务器交互仍待验证。设备回退须沿原签名构建更高 versionCode 的恢复包，不卸载清数据。
 
 1.4.1 已于 2026-10-08 经用户确认发布：[正式 APK 与附件](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.1)。Actions 37704959564 成功，实际下载 APK 摘要与本地一致。更新页复用首页的磨砂白卡、蓝色图标、22dp 圆角与间距；版本并排展示，窄屏改为纵排，说明与任务编号按需展开。查询原任务可显示下载阶段、已下载 MiB 与具体失败原因；不显示未经核验的完成百分比，也不将下载失败误称回退成功。
 
@@ -67,11 +77,11 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 ## 项目更新（1.4.1）
 
-“更新”页提供 Mihomo、Nginx、CLIProxyAPI、AstrBot 的已安装版本、GitHub 版本与发布说明。先在“设置”导入管理员 SSH 私钥并核对主机指纹，再点“检查所有项目”。来源固定为 MetaCubeX/mihomo、nginx/nginx、router-for-me/CLIProxyAPI、AstrBotDevs/AstrBot；GitHub 由服务器访问，失败显示未核验，可打开官方发布页，不沿用旧检查结果。
+“更新”页提供 Mihomo、Nginx、CLIProxyAPI、Zako、AstrBot 的已安装版本、GitHub 版本与发布说明。先在“设置”导入管理员 SSH 私钥并核对主机指纹，再点“检查所有项目”。来源固定为 MetaCubeX/mihomo、nginx/nginx、router-for-me/CLIProxyAPI、mizaawa/ZakoProxyCLI、AstrBotDevs/AstrBot；GitHub 由服务器访问，失败显示未核验，可打开官方发布页，不沿用旧检查结果。
 
 服务器前提是已由维护端审阅安装 `/usr/local/lib/server-toolbox/project_updates.py`，客户端固定执行 `/usr/bin/python3 -B /usr/local/lib/server-toolbox/project_updates.py`，通过标准输入发送 JSON。此应用不自动安装服务器组件；组件不可用时检查/准备失败。服务端策略唯一源码位于运维工作区 `个人服务器工具箱/server/project_updates.py`，手机仅实现既有 release、inspect、plan、execute、result 契约。`assets/update_probe.py` 是工具箱同名只读探针的发行快照；更新探针时从唯一源同步并核验一致，不在手机另写升级策略。
 
-Mihomo、Nginx、CLIProxyAPI 按 inspect → plan → 用户确认 → execute → result 执行；确认对话框列明实际版本、影响、备份编号和回退方式。计划限时 5 分钟，绑定连接、固定主机密钥及私钥修订；服务器重新核对程序、配置、服务和目标版本。确认只消费一次，提交前将任务编号、计划摘要和连接指纹原子写入应用私有 no-backup 目录。退出/断网不会自动重发或取消服务器任务；重开应用恢复编号，点“查询上次升级结果”。没有批量升级或自动更新。
+Mihomo、Nginx、CLIProxyAPI、Zako 按 inspect → plan → 用户确认 → execute → result 执行；确认对话框列明实际版本、影响、备份编号和回退方式。计划限时 5 分钟，绑定连接、固定主机密钥及私钥修订；服务器重新核对程序、配置、服务和目标版本。确认只消费一次，提交前将任务编号、计划摘要和连接指纹原子写入应用私有 no-backup 目录。退出/断网不会自动重发或取消服务器任务；重开应用恢复编号，点“查询上次升级结果”。没有批量升级或自动更新。
 
 - Mihomo：官方包摘要、候选配置、备份、代理与控制器健康检查，失败尝试恢复旧程序。
 - Nginx：GitHub 最近 100 个标签仅作参考，可能含 mainline；安装走原 APT 源和当前索引，不刷新索引，不切软件源，先保存原版本包与配置，再安装并做 nginx/HTTP 验收，失败尝试恢复。

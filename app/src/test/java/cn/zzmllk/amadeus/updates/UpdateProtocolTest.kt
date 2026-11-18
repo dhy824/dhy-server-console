@@ -73,6 +73,15 @@ class UpdateProtocolTest {
         assertEquals("版本需人工核对", UpdateProtocol.release(cli.copy(installed = "unknown"), release).status)
     }
 
+    @Test fun zakoIsARealUpgradeableProject() {
+        val zako = UpdateProtocol.catalog().first { it.id == "zako" }
+        assertEquals("Zako", zako.name)
+        assertEquals("mizaawa/ZakoProxyCLI", zako.repository)
+        val plan = UpdateProtocol.plan(reply("zako"), "zako", "identity", 1000)
+        assertEquals("1.20.0", plan.target)
+        assertTrue(UpdateProtocol.impact("zako").contains("Zako"))
+    }
+
     @Test fun downloadProgressAndRefusalDescribeOnlyVerifiedMutationState() {
         val reply = JSONObject().put("request_id", "id").put("status", "running")
             .put("phase", "download").put("downloaded_bytes", 5242880)

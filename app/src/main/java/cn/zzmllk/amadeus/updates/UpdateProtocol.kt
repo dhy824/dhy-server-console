@@ -19,6 +19,7 @@ object UpdateProtocol {
         ProjectVersion("mihomo", "Mihomo", "MetaCubeX/mihomo"),
         ProjectVersion("nginx", "Nginx", "nginx/nginx"),
         ProjectVersion("cliproxyapi", "CLIProxyAPI", "router-for-me/CLIProxyAPI"),
+        ProjectVersion("zako", "Zako", "mizaawa/ZakoProxyCLI"),
         ProjectVersion("astrbot", "AstrBot", "AstrBotDevs/AstrBot")
     )
 
@@ -68,7 +69,7 @@ object UpdateProtocol {
     }
 
     fun plan(reply: JSONObject, project: String, identity: String, now: Long): UpdatePlan {
-        check(project in setOf("mihomo", "nginx", "cliproxyapi")) { "此项目仅支持查看。" }
+        check(project in setOf("mihomo", "nginx", "cliproxyapi", "zako")) { "此项目仅支持查看。" }
         check(reply.optString("status") == "planned") { describe(reply) }
         val plan = reply.getJSONObject("plan")
         check(plan.getString("project") == project) { "计划项目不匹配。" }
@@ -97,6 +98,7 @@ object UpdateProtocol {
     fun impact(project: String): String = when (project) {
         "mihomo" -> "会短暂重启代理服务。校验官方发行包 SHA-256，备份程序与配置，测试候选配置及代理连通性；失败尝试恢复旧程序。"
         "nginx" -> "会短暂重启网站/API 入口。沿用当前 APT 索引和软件源，先保存原版本包与配置，再安装、执行 nginx -t 和 HTTP 检查；失败尝试恢复原包。索引未刷新不代表没有安全更新。"
+        "zako" -> "会短暂停止并重建 Zako 容器。校验官方 Release 与 GHCR 镜像，备份 Compose、数据卷和管理员配置；保留 127.0.0.1:1990、CPA 上游、Key 与订阅数据，失败尝试恢复原镜像和数据卷。"
         else -> "会短暂重启 API 服务。校验官方包 SHA-256，备份程序、配置及服务定义，仅替换程序；校验 API 与 Nginx 入口，失败尝试恢复旧程序。OAuth 数据原位保留；跨主版本需要单独兼容性评审。"
     }
 

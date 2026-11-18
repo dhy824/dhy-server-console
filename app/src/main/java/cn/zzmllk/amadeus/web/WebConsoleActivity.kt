@@ -51,8 +51,11 @@ import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.service.TunnelRuntime
+import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
 import cn.zzmllk.amadeus.ui.AmadeusTheme
 import cn.zzmllk.amadeus.ui.enableAmadeusEdgeToEdge
+import cn.zzmllk.amadeus.web.isAllowedConsoleUrl
+import cn.zzmllk.amadeus.web.isSameConsoleOrigin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,7 +76,7 @@ class WebConsoleActivity : ComponentActivity() {
         enableAmadeusEdgeToEdge(darkTheme)
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "本机控制台" }
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
-        if (!isSafeLocalUrl(url)) {
+        if (!isAllowedConsoleUrl(url)) {
             finish()
             return
         }
@@ -128,7 +131,7 @@ class WebConsoleActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         AndroidView(
                             factory = {
-                                createWebView(darkTheme).also { view ->
+                                createWebView(darkTheme, url).also { view ->
                                     webView = view
                                     view.doOnLayout {
                                         if (view.url == null) view.loadUrl(url)
@@ -147,7 +150,7 @@ class WebConsoleActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(darkTheme: Boolean): WebView = WebView(this).apply {
+    private fun createWebView(darkTheme: Boolean, initialUrl: String): WebView = WebView(this).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -176,7 +179,7 @@ class WebConsoleActivity : ComponentActivity() {
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val destination = request?.url?.toString().orEmpty()
-                return !isSafeLocalUrl(destination)
+                return !isSameConsoleOrigin(initialUrl, destination)
             }
         }
     }
@@ -184,7 +187,7 @@ class WebConsoleActivity : ComponentActivity() {
     private fun openInExternalBrowser(url: String) {
         if (externalBrowserOpening) return
         val tunnelAction = intent.getStringExtra(EXTRA_TUNNEL_ACTION)
-            ?.takeIf { it in setOf(TunnelService.ACTION_START_API, TunnelService.ACTION_START_ASTRBOT, TunnelService.ACTION_START_ZAKO) }
+            ?.takeIf { it in setOf(TunnelService.ACTION_START_API, TunnelService.ACTION_START_ASTRBOT, TunnelService.ACTION_START_ZAKO, TunnelService.ACTION_START_CPA) }
             ?: return
         lifecycleScope.launch {
             externalBrowserOpening = true
@@ -192,18 +195,22 @@ class WebConsoleActivity : ComponentActivity() {
             try {
                 val requestId = UUID.randomUUID().toString()
                 requestTunnel(tunnelAction, forceReconnect = false, requestId = requestId)
-                if (tunnelAction != TunnelService.ACTION_START_ZAKO) {
+                val browserUrl = if (tunnelAction == TunnelService.ACTION_START_CPA) {
+                    awaitCpaTunnel(requestId)
+                } else if (tunnelAction != TunnelService.ACTION_START_ZAKO) {
                     var reachable = waitUntilReachable(url, NORMAL_PROBE_TIMEOUT_MS)
                     if (!reachable) {
                         requestTunnel(tunnelAction, forceReconnect = true, requestId = UUID.randomUUID().toString())
                         reachable = waitUntilReachable(url, RECONNECT_PROBE_TIMEOUT_MS)
                     }
                     check(reachable) { "local tunnel unavailable" }
+                    url
                 } else {
                     awaitZakoTunnel(requestId)
+                    url
                 }
                 startActivity(
-                    Intent(Intent.ACTION_VIEW, url.toUri())
+                    Intent(Intent.ACTION_VIEW, browserUrl.toUri())
                         .addCategory(Intent.CATEGORY_BROWSABLE)
                 )
             } catch (_: Exception) {
@@ -225,7 +232,20 @@ class WebConsoleActivity : ComponentActivity() {
                 .setAction(action)
                 .putExtra(TunnelService.EXTRA_FORCE_RECONNECT, forceReconnect)
                 .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
+                .putExtra(TunnelService.EXTRA_CPA_PROFILE_ID, intent.getStringExtra(EXTRA_CPA_PROFILE_ID))
         )
+    }
+
+    private suspend fun awaitCpaTunnel(requestId: String): String = withTimeout(35_000) {
+        val profileId = intent.getStringExtra(EXTRA_CPA_PROFILE_ID) ?: error("CPA 服务器档案缺失。")
+        val state = TunnelRuntime.state.first {
+            it.requestId == requestId && it.cpaProfileId == profileId && !it.connecting &&
+                (it.error != null || it.cpaActive)
+        }
+        state.error?.let { error(it) }
+        val port = state.cpaLocalPort ?: error("CPA 通道未就绪。")
+        val host = state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")
+        "http://$host:$port$CPA_CONSOLE_PATH"
     }
 
     private suspend fun awaitZakoTunnel(requestId: String) {
@@ -262,14 +282,6 @@ class WebConsoleActivity : ComponentActivity() {
         }
     }
 
-    private fun isSafeLocalUrl(value: String): Boolean = runCatching {
-        val uri = value.toUri()
-        uri.scheme == "http" &&
-            uri.userInfo == null &&
-            (uri.host == "127.0.0.1" || uri.host == "localhost") &&
-            uri.port in 1..65535
-    }.getOrDefault(false)
-
     companion object {
         private val COMPACT_TOOLBAR_HEIGHT = 52.dp
         private const val NORMAL_PROBE_TIMEOUT_MS = 2_500L
@@ -279,5 +291,6 @@ class WebConsoleActivity : ComponentActivity() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_URL = "url"
         const val EXTRA_TUNNEL_ACTION = "tunnel_action"
+        const val EXTRA_CPA_PROFILE_ID = "cpa_profile_id"
     }
 }
