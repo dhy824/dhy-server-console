@@ -609,7 +609,7 @@ private fun CpaConsoleCard(
         ) {
             Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("打开所选服务器的 FreeTier2API 控制台")
+            Text("打开所选服务器的 CPA 管理控制台")
         }
         if (active) {
             OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -618,7 +618,7 @@ private fun CpaConsoleCard(
         }
         if (profiles.isEmpty()) {
             Spacer(Modifier.height(4.dp))
-            Text("默认服务器没有可用的 FreeTier2API 页面时，请在设置中添加并选择对应服务器档案。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+            Text("请在设置中选择已配置 CPA 管理控制台的服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = onManage, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("管理 CPA 服务器") }
         }
     }

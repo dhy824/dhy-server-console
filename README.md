@@ -1,3 +1,7 @@
+# 2026-11-19 Android CPA 管理页转发 1.4.23
+
+甲骨文 CPA 入口按老 ECS 的方式通过所选服务器档案里的 SSH 私钥建立本机回环隧道，再打开 CLIProxyAPI 自带管理页 `/management.html`，目标为服务器回环 `127.0.0.1:8317`，页面返回 HTTP 200 后才打开。管理页登录使用 CLIProxyAPI 的 Management Secret；Android 不改写服务端凭据或阿里云 SSH 私钥。2026-11-19，Oracle `ap-osaka-1` 已启用原生管理页并通过电脑端 SSH 隧道验收，`allow-remote: false` 保持不变。手机真机交互仍待验证。
+
 # 2026-11-18 Android 全局服务器选择 1.4.22（已发布）
 
 版本 `1.4.22` / `versionCode 37` 将设置中的“阿里云 / 甲骨文”选择作为全 app 活动服务器。阿里云沿用已有连接与私钥；甲骨文档案独立保存 SSH 私钥、主机指纹和 CPA 配置。选择甲骨文时目前只显示 CPA 控制台；API、AstrBot、Zako、订阅、测速、审核和更新入口先隐藏，待相应服务器能力配置后再增加。终端当前也仅用于阿里云。
@@ -58,15 +62,15 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 # Android 服务器控制台
 
-源码版本 1.4.21（versionCode 36）。Jetpack Compose + SSH，支持 API/AstrBot/Zako 和独立 CPA 控制台回环隧道、CPA 档案手机端密钥生成、单命令终端、Mihomo 管理与项目更新。CPA 档案与默认 SSH 目标互相独立。
+源码版本 1.4.23（versionCode 38）。Jetpack Compose + SSH，设置中的阿里云 / 甲骨文选择决定所有显示功能的当前 SSH 目标。甲骨文 CPA 入口使用 CLIProxyAPI 自带的 `/management.html`，经 SSH 本机回环转发，不走 FreeTier2API 插件路由。
 
 ## CPA 服务器档案
 
-在“设置 → CPA 服务器”中新增档案，填写名称、SSH 地址、端口和用户名，再为每个档案在手机生成独立 Ed25519 密钥。私钥只保存在本机加密存储，页面提供公钥与 SHA-256 指纹；将公钥按所选服务器的管理员审批流程登记后，再测试 SSH 并通过可信来源核对服务器主机指纹。回到“总览”，选择服务器档案并打开 FreeTier2API 控制台。旧版安卓端要求用户导入私钥；已有私钥仍可继续导入。
+在“设置 → 服务器”中选择甲骨文档案，为该档案生成或导入独立 SSH 私钥；私钥只保存在本机加密存储。新公钥需先由服务器管理员登记，再核对主机指纹。选择甲骨文后在“总览”打开 CPA 管理控制台。与老 ECS 一样，Android 使用所选档案的 SSH 私钥认证并仅转发到该服务器的 `127.0.0.1:8317`，再打开 `/management.html`；页面返回 HTTP 200 后才打开。网页登录使用服务端 CLIProxyAPI 配置的 Management Secret。服务端须启用控制面板并配置 Secret，`allow-remote: false` 时只通过回环入口访问管理页。
 
-每个档案的私钥以 Android Keystore 单独加密；删除档案会移除其档案数据、固定指纹和专用私钥，但不影响默认 SSH 私钥。服务器地址/端口修改会清除该档案旧指纹和密钥，并更换其回环来源，必须重新授权和核对。不同档案使用不同的 `127.0.0.x` 回环来源以隔离 WebView Cookie，删除或更换端点后旧来源不复用。应用仅通过 SSH 把所选服务器的 `127.0.0.1:8317` 转到手机回环，并打开固定 `/v0/resource/plugins/freetier/console` 路径；页面必须 HTTP 200 才算就绪。没有公网监听或 DNS 变更。
+每个档案的私钥以 Android Keystore 单独加密；删除档案不会影响阿里云原私钥。地址/端口修改会清除该档案的主机指纹和密钥，必须重新授权和核对。不同档案使用不同的 `127.0.0.x` 回环来源隔离 WebView Cookie，已退役来源不复用。管理密码为服务端 CLIProxyAPI 配置的 Management Secret，不由 Android 保存或改写。
 
-1.4.21 沿用原应用签名与包名，保留 Android Keystore 旧密文读取和已有私钥导入方式。用户需要先将配对公钥交由服务器管理员登记，再测试 SSH 并核对主机指纹。设备回退保持原签名和更高 versionCode 规则，不卸载清数据。
+1.4.23 候选沿用原包名，保留 Android Keystore 旧密文读取和已有私钥导入方式。本地 Debug 包使用测试签名；正式发布及设备回退须使用原签名，回退包须使用更高的 versionCode，不卸载清数据。
 
 1.4.20 已由 GitHub Actions 运行 `44236871591` 正式发布；Release、Lint、36 项 JVM 测试、Public 空地址、非调试标记及原签名连续性均通过。APK SHA-256 为 `70b49ba79177b0118388de61df0a48d218b0abf4999778a051bd96da4630228f`。Android 真机安装与目标服务器交互仍待验证。设备回退须沿原签名构建更高 versionCode 的恢复包，不卸载清数据。
 

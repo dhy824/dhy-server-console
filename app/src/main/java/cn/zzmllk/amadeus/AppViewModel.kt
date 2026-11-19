@@ -11,7 +11,7 @@ import androidx.lifecycle.viewModelScope
 import cn.zzmllk.amadeus.data.AppConfig
 import cn.zzmllk.amadeus.data.ActiveServerConnection
 import cn.zzmllk.amadeus.data.ActiveServerStore
-import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
+import cn.zzmllk.amadeus.data.CPA_MANAGEMENT_PATH
 import cn.zzmllk.amadeus.data.CpaProfileStore
 import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.CpaServerProfile
@@ -388,8 +388,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val localPort = state.cpaLocalPort ?: error("CPA 本机回环转发未建立。")
                 mutableOpenConsole.emit(
                     ConsoleRequest(
-                        "CPA 插件控制台 · ${profile.name}",
-                        "http://${state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")}:$localPort$CPA_CONSOLE_PATH",
+                        "CPA 管理控制台 · ${profile.name}",
+                        "http://${state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")}:$localPort$CPA_MANAGEMENT_PATH",
                         TunnelService.ACTION_START_CPA,
                         cpaProfileId = profile.id,
                         serverProfileId = selected.profileId

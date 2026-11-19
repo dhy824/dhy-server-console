@@ -31,7 +31,7 @@ class TunnelHealthTest {
                 socket.getOutputStream().write("HTTP/1.1 $portStatus Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
             }
         }
-        try { tunnelHttpStatus(server.localPort, "/v0/resource/plugins/freetier/console", 2_000) }
+        try { tunnelHttpStatus(server.localPort, "/management.html", 2_000) }
         finally { worker.join(2_000) }
     }
 

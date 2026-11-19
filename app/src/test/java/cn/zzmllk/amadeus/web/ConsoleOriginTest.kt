@@ -7,7 +7,7 @@ import org.junit.Test
 class ConsoleOriginTest {
     @Test
     fun sameOriginNavigationStaysOnTheSelectedServerAndPort() {
-        val origin = "http://127.0.0.2:39127/v0/resource/plugins/freetier/console"
+        val origin = "http://127.0.0.2:39127/management.html"
 
         assertTrue(isSameConsoleOrigin(origin, "http://127.0.0.2:39127/#/settings"))
         assertFalse(isSameConsoleOrigin(origin, "http://127.0.0.3:39127/#/settings"))

@@ -11,7 +11,7 @@ import java.util.Locale
 import java.util.Base64
 import java.util.UUID
 
-const val CPA_CONSOLE_PATH = "/v0/resource/plugins/freetier/console"
+const val CPA_MANAGEMENT_PATH = "/management.html"
 
 enum class ServerService(val storageKey: String, val displayName: String) {
     CPA("cpa", "CPA"),

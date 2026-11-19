@@ -51,7 +51,7 @@ import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.service.TunnelRuntime
-import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
+import cn.zzmllk.amadeus.data.CPA_MANAGEMENT_PATH
 import cn.zzmllk.amadeus.ui.AmadeusTheme
 import cn.zzmllk.amadeus.ui.enableAmadeusEdgeToEdge
 import cn.zzmllk.amadeus.web.isAllowedConsoleUrl
@@ -247,7 +247,7 @@ class WebConsoleActivity : ComponentActivity() {
         state.error?.let { error(it) }
         val port = state.cpaLocalPort ?: error("CPA 通道未就绪。")
         val host = state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")
-        "http://$host:$port$CPA_CONSOLE_PATH"
+        "http://$host:$port$CPA_MANAGEMENT_PATH"
     }
 
     private suspend fun awaitZakoTunnel(requestId: String) {

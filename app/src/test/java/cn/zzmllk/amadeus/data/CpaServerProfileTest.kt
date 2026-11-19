@@ -109,7 +109,7 @@ class CpaServerProfileTest {
     }
 
     @Test
-    fun consoleRouteIsTheFixedPluginPage() {
-        assertEquals("/v0/resource/plugins/freetier/console", CPA_CONSOLE_PATH)
+    fun consoleRouteIsTheCliProxyManagementPage() {
+        assertEquals("/management.html", CPA_MANAGEMENT_PATH)
     }
 }

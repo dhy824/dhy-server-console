@@ -12,7 +12,7 @@ import cn.zzmllk.amadeus.MainActivity
 import cn.zzmllk.amadeus.R
 import cn.zzmllk.amadeus.data.ActiveServerConnection
 import cn.zzmllk.amadeus.data.ActiveServerStore
-import cn.zzmllk.amadeus.data.CPA_CONSOLE_PATH
+import cn.zzmllk.amadeus.data.CPA_MANAGEMENT_PATH
 import cn.zzmllk.amadeus.data.CpaProfileStore
 import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.ConfigStore
@@ -323,7 +323,7 @@ class TunnelService : Service() {
             val reusable = cpaProfileId == profile.id && cpaSession?.isConnected == true &&
                 cpaConnectionSignature == signature && cpaForwarder?.isOpen == true &&
                 cpaConsoleResponseOk(cpaForwarder?.localPort?.let {
-                    tunnelHttpStatus(it, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, selected.localHost)
+                    tunnelHttpStatus(it, CPA_MANAGEMENT_PATH, CPA_PROBE_TIMEOUT_MS, selected.localHost)
                 })
             if (!reusable) {
                 disconnectCpaSession()
@@ -340,11 +340,11 @@ class TunnelService : Service() {
                 cpaForwarder = LocalSshForwarder(created, "127.0.0.1", 8317, selected.localHost)
             }
             val localPort = cpaForwarder?.localPort ?: error("CPA 本机回环转发未建立。")
-            phase = "检查 FreeTier2API 插件控制台"
+            phase = "检查 CPA 管理控制台"
             val status = waitForCpaConsole(localPort, selected.localHost)
             check(cpaConsoleResponseOk(status)) {
-                if (status == null) "CPA SSH 转发已建立，但插件控制台无 HTTP 响应。"
-                else "FreeTier2API 插件控制台返回 HTTP $status；仅 HTTP 200 时允许打开。"
+                if (status == null) "CPA SSH 转发已建立，但管理页面无 HTTP 响应。请检查 CPA 控制面板是否启用。"
+                else "CPA 管理页面返回 HTTP $status；仅 HTTP 200 时允许打开。"
             }
             publish(previous.copy(
                 requestId = requestId,
@@ -356,15 +356,15 @@ class TunnelService : Service() {
                 activeServerId = selected.profileId,
                 activeServerName = selected.name,
                 activeServerLocalHost = selected.localHost,
-                message = "CPA 插件控制台通道已就绪：${profile.name}"
+                message = "CPA 管理控制台通道已就绪：${profile.name}"
             ))
         } catch (error: Exception) {
             disconnectCpaSession()
             if (destroyed) return
             val message = when (error.message) {
-                "尚未导入 SSH 私钥。", "请先测试此 CPA 档案并确认服务器主机指纹。",
-                "所选 CPA 服务器档案不存在。", "CPA SSH 转发已建立，但插件控制台无 HTTP 响应。" -> error.message!!
-                else -> error.message?.takeIf { it.startsWith("FreeTier2API 插件控制台返回 HTTP ") }
+                "尚未为此服务器配置 SSH 私钥。", "请先测试此 CPA 档案并确认服务器主机指纹。",
+                "所选 CPA 服务器档案不存在。", "CPA SSH 转发已建立，但管理页面无 HTTP 响应。请检查 CPA 控制面板是否启用。" -> error.message!!
+                else -> error.message?.takeIf { it.startsWith("CPA 管理页面返回 HTTP ") }
                     ?: tunnelFailure(error, phase)
             }
             publish(previous.copy(
@@ -421,7 +421,7 @@ class TunnelService : Service() {
 
     private fun waitForCpaConsole(port: Int, localHost: String): Int? {
         repeat(CPA_PROBE_ATTEMPTS) { attempt ->
-            val status = tunnelHttpStatus(port, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, localHost)
+            val status = tunnelHttpStatus(port, CPA_MANAGEMENT_PATH, CPA_PROBE_TIMEOUT_MS, localHost)
             if (status != null) return status
             if (attempt + 1 < CPA_PROBE_ATTEMPTS) Thread.sleep(CPA_PROBE_INTERVAL_MS)
         }
@@ -473,7 +473,7 @@ class TunnelService : Service() {
                 cpaConnectionSignature == connectionIdentity(cpaTarget.config, cpaTarget.keyRevision) &&
                 cpaForwarder?.isOpen == true && cpaForwarder?.localPort?.let {
                     cpaConsoleResponseOk(
-                        tunnelHttpStatus(it, CPA_CONSOLE_PATH, CPA_PROBE_TIMEOUT_MS, cpaTarget.localHost)
+                        tunnelHttpStatus(it, CPA_MANAGEMENT_PATH, CPA_PROBE_TIMEOUT_MS, cpaTarget.localHost)
                     )
                 } == true
             if (normalHealthy && cpaHealthy) return
