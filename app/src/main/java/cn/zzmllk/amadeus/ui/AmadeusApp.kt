@@ -111,6 +111,7 @@ import cn.zzmllk.amadeus.data.AppConfig
 import cn.zzmllk.amadeus.data.CpaSshKeyGenerator
 import cn.zzmllk.amadeus.data.CpaServerProfile
 import cn.zzmllk.amadeus.data.ProfileConsole
+import cn.zzmllk.amadeus.data.ProfileConsolePage
 import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.data.aliyunServices
 import cn.zzmllk.amadeus.service.TunnelState
@@ -465,7 +466,7 @@ private fun DashboardScreen(
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
     onOpenZako: () -> Unit,
-    onOpenProfileConsole: (String, ProfileConsole) -> Unit,
+    onOpenProfileConsole: (String, ProfileConsolePage) -> Unit,
     onStopProfileConsole: () -> Unit,
     onOpenDistillation: () -> Unit,
     onOpenReview: () -> Unit,
@@ -534,7 +535,7 @@ private fun DashboardScreen(
                     console = console,
                     active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id && tunnel.profileConsole == console,
                     busy = busy,
-                    onOpen = { onOpenProfileConsole(serverProfile.id, console) },
+                    onOpen = { page -> onOpenProfileConsole(serverProfile.id, page) },
                     onStop = onStopProfileConsole
                 )
             }
@@ -586,7 +587,7 @@ private fun ProfileConsoleCard(
     console: ProfileConsole,
     active: Boolean,
     busy: Boolean,
-    onOpen: () -> Unit,
+    onOpen: (ProfileConsolePage) -> Unit,
     onStop: () -> Unit
 ) {
     GlassCard {
@@ -600,14 +601,31 @@ private fun ProfileConsoleCard(
             StatusBadge(active, if (active) "已连接" else "待机")
         }
         Spacer(Modifier.height(12.dp))
+        val mainPage = when (console) {
+            ProfileConsole.CPA -> ProfileConsolePage.CPA
+            ProfileConsole.SEARXNG -> ProfileConsolePage.SEARXNG_HOME
+        }
         FilledTonalButton(
-            onClick = onOpen,
+            onClick = { onOpen(mainPage) },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
             Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("打开 ${console.title}")
+            Text("打开 ${mainPage.title}")
+        }
+        if (console == ProfileConsole.SEARXNG) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (page in listOf(ProfileConsolePage.SEARXNG_PREFERENCES, ProfileConsolePage.SEARXNG_STATS)) {
+                    OutlinedButton(
+                        onClick = { onOpen(page) },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                    ) {
+                        Text(page.title)
+                    }
+                }
+            }
         }
         if (active) {
             OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth()) {

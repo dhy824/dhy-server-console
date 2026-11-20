@@ -52,6 +52,7 @@ import androidx.lifecycle.lifecycleScope
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.service.TunnelRuntime
 import cn.zzmllk.amadeus.data.ProfileConsole
+import cn.zzmllk.amadeus.data.ProfileConsolePage
 import cn.zzmllk.amadeus.ui.AmadeusTheme
 import cn.zzmllk.amadeus.ui.enableAmadeusEdgeToEdge
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.util.UUID
 
@@ -210,7 +212,8 @@ class WebConsoleActivity : ComponentActivity() {
                 val requestId = UUID.randomUUID().toString()
                 requestTunnel(tunnelAction, forceReconnect = false, requestId = requestId)
                 val browserUrl = if (console != null) {
-                    awaitProfileTunnel(requestId, console)
+                    val page = ProfileConsolePage.forPath(console, URI(url).path) ?: error("网页入口无效。")
+                    awaitProfileTunnel(requestId, page)
                 } else if (tunnelAction != TunnelService.ACTION_START_ZAKO) {
                     var reachable = waitUntilReachable(url, NORMAL_PROBE_TIMEOUT_MS)
                     if (!reachable) {
@@ -253,16 +256,16 @@ class WebConsoleActivity : ComponentActivity() {
         )
     }
 
-    private suspend fun awaitProfileTunnel(requestId: String, console: ProfileConsole): String = withTimeout(35_000) {
+    private suspend fun awaitProfileTunnel(requestId: String, page: ProfileConsolePage): String = withTimeout(35_000) {
         val profileId = intent.getStringExtra(EXTRA_CPA_PROFILE_ID) ?: error("服务器档案缺失。")
         val state = TunnelRuntime.state.first {
             it.requestId == requestId && it.cpaProfileId == profileId && !it.connecting &&
-                (it.error != null || it.cpaActive && it.profileConsole == console)
+                (it.error != null || it.cpaActive && it.profileConsole == page.console)
         }
         state.error?.let { error(it) }
         val port = state.cpaLocalPort ?: error("网页通道未就绪。")
         val host = state.cpaLocalHost ?: error("隔离回环地址缺失。")
-        console.localUrl(host, port)
+        page.localUrl(host, port)
     }
 
     private suspend fun awaitZakoTunnel(requestId: String) {

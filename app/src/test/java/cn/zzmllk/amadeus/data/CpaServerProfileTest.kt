@@ -122,12 +122,26 @@ class CpaServerProfileTest {
         assertEquals(ProfileConsole.SEARXNG, console)
         assertEquals(18888, console.remotePort)
         assertEquals("/preferences", console.probePath)
-        assertEquals("http://127.0.0.3:39127/", console.localUrl(restored.last().localHost, 39127))
+        assertEquals("http://127.0.0.3:39127/", ProfileConsolePage.SEARXNG_HOME.localUrl(restored.last().localHost, 39127))
         assertFalse(ServerService.SEARXNG in aliyunServices)
         assertFalse(restored.last().supports(ServerService.CPA))
         assertTrue(runCatching {
             CpaProfileCodec.validate(listOf(search.copy(configuredServices = setOf(ServerService.SEARXNG, ServerService.CPA))))
         }.isFailure)
+    }
+
+    @Test
+    fun directLinksStayOnTheSelectedProfileTunnelAndService() {
+        val host = "127.0.0.3"
+        val port = 39211
+
+        assertEquals("http://$host:$port/preferences", ProfileConsolePage.SEARXNG_PREFERENCES.localUrl(host, port))
+        assertEquals("http://$host:$port/stats", ProfileConsolePage.SEARXNG_STATS.localUrl(host, port))
+        assertEquals(ProfileConsolePage.SEARXNG_PREFERENCES, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, "/preferences"))
+        assertEquals(ProfileConsolePage.SEARXNG_STATS, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, "/stats"))
+        assertEquals(ProfileConsolePage.CPA, ProfileConsolePage.forPath(ProfileConsole.CPA, CPA_MANAGEMENT_PATH))
+        assertEquals(null, ProfileConsolePage.forPath(ProfileConsole.CPA, "/preferences"))
+        assertEquals(null, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, CPA_MANAGEMENT_PATH))
     }
 
     @Test

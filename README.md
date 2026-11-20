@@ -1,3 +1,7 @@
+# 2026-11-20 Android SearXNG 页面快捷入口 1.4.25
+
+本地候选 1.4.25（versionCode 40）在“总览”的 SearXNG 卡片新增“偏好设置”和“引擎状态”，沿用所选档案的 SSH 转发与主机校验。三个入口分别打开首页、/preferences、/stats。偏好设置按浏览器保存，实例默认引擎、搜索格式和上游参数由服务端 settings.yml 管理。SSH 连接和排障步骤见《使用说明》。
+
 # 2026-11-20 Android SearXNG 网页 1.4.24
 
 [GitHub Release v1.4.24](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.24) 提供原签名 APK、校验摘要和许可证。
@@ -70,7 +74,7 @@ Release/Lint和15项JVM测试通过，公开空host/非调试/原签名连续性
 
 # Android 服务器控制台
 
-源码版本 1.4.24（versionCode 39）。Jetpack Compose + SSH，设置中的阿里云 / 甲骨文选择决定所有显示功能的当前 SSH 目标。甲骨文 CPA 入口使用 CLIProxyAPI 自带的 `/management.html`，经 SSH 本机回环转发，不走 FreeTier2API 插件路由。
+源码版本 1.4.25（versionCode 40）。Jetpack Compose + SSH，设置中的阿里云 / 甲骨文选择决定所有显示功能的当前 SSH 目标。甲骨文 CPA 入口使用 CLIProxyAPI 自带的 `/management.html`，经 SSH 本机回环转发，不走 FreeTier2API 插件路由。
 
 ## CPA 服务器档案
 

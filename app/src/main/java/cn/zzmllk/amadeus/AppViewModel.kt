@@ -14,7 +14,7 @@ import cn.zzmllk.amadeus.data.ActiveServerStore
 import cn.zzmllk.amadeus.data.CpaProfileStore
 import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.CpaServerProfile
-import cn.zzmllk.amadeus.data.ProfileConsole
+import cn.zzmllk.amadeus.data.ProfileConsolePage
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.data.ServerService
@@ -358,7 +358,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableFingerprint.value = null
     }
 
-    fun openProfileConsole(profileId: String, console: ProfileConsole) {
+    fun openProfileConsole(profileId: String, page: ProfileConsolePage) {
+        val console = page.console
         viewModelScope.launch {
             runBusy(null) {
                 val selected = activeServerStore.current()
@@ -390,8 +391,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val localHost = state.cpaLocalHost ?: error("隔离回环地址缺失。")
                 mutableOpenConsole.emit(
                     ConsoleRequest(
-                        "${console.title} · ${profile.name}",
-                        console.localUrl(localHost, localPort),
+                        "${page.title} · ${profile.name}",
+                        page.localUrl(localHost, localPort),
                         action,
                         cpaProfileId = profile.id,
                         serverProfileId = selected.profileId
