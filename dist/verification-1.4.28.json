@@ -1,0 +1,22 @@
+{
+  "version": "1.4.28",
+  "versionCode": 43,
+  "package": "cn.zzmllk.amadeus",
+  "minSdk": 26,
+  "apk": "dhy-server-console-1.4.28.apk",
+  "size": 1552649,
+  "sha256": "ac849e6c7c0039bc9e83d0aa219aafa03d715e531f0c46b6ba48987d07abe03f",
+  "publicDefaultsVerified": true,
+  "signatureVerified": true,
+  "signerContinuityVerified": true,
+  "signerContinuityReferenceVersion": "1.4.26",
+  "releaseBuildVerified": true,
+  "lintReleaseVerified": true,
+  "lintErrors": 0,
+  "lintWarnings": 4,
+  "jvmTestsPassed": 47,
+  "publicSourceFiles": 89,
+  "sourceManifestVerified": true,
+  "composePreviewsChecked": 10,
+  "phoneRealDeviceVerified": false
+}
