@@ -1,5 +1,7 @@
 # Android 1.4.26 SearXNG 实例配置
 
+[GitHub Release v1.4.26](https://github.com/dhy824/dhy-server-console/releases/tag/v1.4.26) 提供原签名升级 APK、校验清单和许可证。
+
 「总览 → 编辑实例配置」通过所选 SearXNG SSH 档案固定转发到服务器的 127.0.0.1:18889。搜索网页、偏好和引擎状态使用原转发目标。使用该入口需部署相应的回环配置编辑服务，服务器账号须允许该转发目标。原签名升级保留旧档案，回退包使用原签名和更高 versionCode。
 
 # 2026-11-20 Android SearXNG 页面快捷入口 1.4.25
