@@ -140,6 +140,10 @@ class CpaServerProfileTest {
         assertEquals(ProfileConsolePage.SEARXNG_PREFERENCES, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, "/preferences"))
         assertEquals(ProfileConsolePage.SEARXNG_STATS, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, "/stats"))
         assertEquals(ProfileConsolePage.CPA, ProfileConsolePage.forPath(ProfileConsole.CPA, CPA_MANAGEMENT_PATH))
+        assertEquals(18889, ProfileConsole.SEARXNG_CONFIG.remotePort)
+        assertEquals("/healthz", ProfileConsole.SEARXNG_CONFIG.probePath)
+        assertEquals(ProfileConsolePage.SEARXNG_SETTINGS, ProfileConsolePage.forPath(ProfileConsole.SEARXNG_CONFIG, "/"))
+        assertEquals(null, ProfileConsolePage.forPath(ProfileConsole.SEARXNG_CONFIG, "/preferences"))
         assertEquals(null, ProfileConsolePage.forPath(ProfileConsole.CPA, "/preferences"))
         assertEquals(null, ProfileConsolePage.forPath(ProfileConsole.SEARXNG, CPA_MANAGEMENT_PATH))
     }

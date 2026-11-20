@@ -103,7 +103,7 @@ class TunnelService : Service() {
             ACTION_START_API -> executor.execute { startTunnel(Target.API, forceReconnect, requestId, serverProfileId) }
             ACTION_START_ASTRBOT -> executor.execute { startTunnel(Target.ASTRBOT, forceReconnect, requestId, serverProfileId) }
             ACTION_START_ZAKO -> executor.execute { startTunnel(Target.ZAKO, forceReconnect, requestId, serverProfileId) }
-            ACTION_START_CPA, ACTION_START_SEARXNG -> executor.execute {
+            ACTION_START_CPA, ACTION_START_SEARXNG, ACTION_START_SEARXNG_CONFIG -> executor.execute {
                 val console = profileConsoleForAction(intent.action) ?: return@execute
                 startProfileTunnel(console, intent.getStringExtra(EXTRA_CPA_PROFILE_ID).orEmpty(), requestId, serverProfileId)
             }
@@ -588,15 +588,18 @@ class TunnelService : Service() {
         const val ACTION_START_ZAKO = "cn.zzmllk.amadeus.START_ZAKO"
         const val ACTION_START_CPA = "cn.zzmllk.amadeus.START_CPA"
         const val ACTION_START_SEARXNG = "cn.zzmllk.amadeus.START_SEARXNG"
+        const val ACTION_START_SEARXNG_CONFIG = "cn.zzmllk.amadeus.START_SEARXNG_CONFIG"
 
         fun actionForProfileConsole(console: ProfileConsole): String = when (console) {
             ProfileConsole.CPA -> ACTION_START_CPA
             ProfileConsole.SEARXNG -> ACTION_START_SEARXNG
+            ProfileConsole.SEARXNG_CONFIG -> ACTION_START_SEARXNG_CONFIG
         }
 
         fun profileConsoleForAction(action: String?): ProfileConsole? = when (action) {
             ACTION_START_CPA -> ProfileConsole.CPA
             ACTION_START_SEARXNG -> ProfileConsole.SEARXNG
+            ACTION_START_SEARXNG_CONFIG -> ProfileConsole.SEARXNG_CONFIG
             else -> null
         }
         const val ACTION_STOP_CPA = "cn.zzmllk.amadeus.STOP_CPA"

@@ -533,7 +533,7 @@ private fun DashboardScreen(
                 ProfileConsoleCard(
                     profile = serverProfile,
                     console = console,
-                    active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id && tunnel.profileConsole == console,
+                    active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id && tunnel.profileConsole?.service == console.service,
                     busy = busy,
                     onOpen = { page -> onOpenProfileConsole(serverProfile.id, page) },
                     onStop = onStopProfileConsole
@@ -603,7 +603,7 @@ private fun ProfileConsoleCard(
         Spacer(Modifier.height(12.dp))
         val mainPage = when (console) {
             ProfileConsole.CPA -> ProfileConsolePage.CPA
-            ProfileConsole.SEARXNG -> ProfileConsolePage.SEARXNG_HOME
+            ProfileConsole.SEARXNG, ProfileConsole.SEARXNG_CONFIG -> ProfileConsolePage.SEARXNG_HOME
         }
         FilledTonalButton(
             onClick = { onOpen(mainPage) },
@@ -614,7 +614,12 @@ private fun ProfileConsoleCard(
             Spacer(Modifier.width(8.dp))
             Text("打开 ${mainPage.title}")
         }
-        if (console == ProfileConsole.SEARXNG) {
+        if (console.service == ServerService.SEARXNG) {
+            FilledTonalButton(
+                onClick = { onOpen(ProfileConsolePage.SEARXNG_SETTINGS) },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) { Text(ProfileConsolePage.SEARXNG_SETTINGS.title) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (page in listOf(ProfileConsolePage.SEARXNG_PREFERENCES, ProfileConsolePage.SEARXNG_STATS)) {
                     OutlinedButton(
@@ -1093,7 +1098,7 @@ private fun CpaProfileEditorDialog(
                 if (initial == null) {
                     Text("网页服务", style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ProfileConsole.entries.forEach { option ->
+                        listOf(ProfileConsole.CPA, ProfileConsole.SEARXNG).forEach { option ->
                             FilterChip(
                                 selected = option == console,
                                 onClick = { console = option },

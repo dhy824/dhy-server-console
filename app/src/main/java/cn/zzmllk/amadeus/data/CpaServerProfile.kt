@@ -34,7 +34,8 @@ enum class ProfileConsole(
     val probePath: String
 ) {
     CPA(ServerService.CPA, "CPA 管理控制台", 8317, CPA_MANAGEMENT_PATH),
-    SEARXNG(ServerService.SEARXNG, "SearXNG 网页", 18888, "/preferences");
+    SEARXNG(ServerService.SEARXNG, "SearXNG 网页", 18888, "/preferences"),
+    SEARXNG_CONFIG(ServerService.SEARXNG, "SearXNG 实例配置", 18889, "/healthz");
 
     companion object {
         fun forProfile(profile: CpaServerProfile): ProfileConsole? =
@@ -46,7 +47,8 @@ enum class ProfileConsolePage(val console: ProfileConsole, val title: String, va
     CPA(ProfileConsole.CPA, ProfileConsole.CPA.title, CPA_MANAGEMENT_PATH),
     SEARXNG_HOME(ProfileConsole.SEARXNG, ProfileConsole.SEARXNG.title, "/"),
     SEARXNG_PREFERENCES(ProfileConsole.SEARXNG, "偏好设置", "/preferences"),
-    SEARXNG_STATS(ProfileConsole.SEARXNG, "引擎状态", "/stats");
+    SEARXNG_STATS(ProfileConsole.SEARXNG, "引擎状态", "/stats"),
+    SEARXNG_SETTINGS(ProfileConsole.SEARXNG_CONFIG, "编辑实例配置", "/");
 
     fun localUrl(host: String, port: Int): String = "http://$host:$port$path"
 
