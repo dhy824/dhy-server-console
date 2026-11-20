@@ -12,8 +12,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -37,10 +42,11 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.OpenInBrowser
@@ -67,6 +73,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -74,10 +81,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +102,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -133,7 +143,7 @@ fun AmadeusApp(
     val cpaProfiles by viewModel.cpaProfiles.collectAsState()
     val activeServerId by viewModel.activeServerId.collectAsState()
     val activeServerProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
-    val activeServerName = activeServerProfile?.let { "甲骨文 · ${it.name}" } ?: "阿里云"
+    val activeServerName = activeServerProfile?.name ?: "阿里云"
     val activeConfig = activeServerProfile?.toAppConfig() ?: config
     val configuredServices = activeServerProfile?.configuredServices ?: aliyunServices
     val visibleTabs = remember(configuredServices) {
@@ -226,7 +236,10 @@ fun AmadeusApp(
                 AppNavigationRail(tabs = visibleTabs, selected = selected, onSelected = { selected = it })
             }
             Scaffold(
-                modifier = Modifier.weight(1f).imePadding(),
+                modifier = Modifier.weight(1f)
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .imePadding(),
+                contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical),
                 containerColor = Color.Transparent,
                 snackbarHost = { SnackbarHost(snackbar) },
                 bottomBar = {
@@ -245,7 +258,8 @@ fun AmadeusApp(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .fillMaxHeight()
-                                .widthIn(max = 920.dp)
+                                .widthIn(max = if (selected == AppTab.HOME.ordinal ||
+                                    selected == AppTab.SETTINGS.ordinal) 1060.dp else 920.dp)
                                 .fillMaxWidth()
                         ) {
                             AppHeader(tunnel = tunnel, busy = busy)
@@ -372,16 +386,28 @@ private fun AppNavigationRail(tabs: List<AppTab>, selected: Int, onSelected: (In
         modifier = Modifier.fillMaxHeight().statusBarsPadding(),
         containerColor = Color.White.copy(alpha = 0.96f)
     ) {
-        Spacer(Modifier.height(12.dp))
-        tabs.forEach { tab ->
-            val index = tab.ordinal
-            NavigationRailItem(
-                selected = selected == index,
-                onClick = { onSelected(index) },
-                icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(tab.title) },
-                alwaysShowLabel = true
-            )
+        Column(
+            modifier = Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(12.dp))
+            tabs.forEach { tab ->
+                val index = tab.ordinal
+                NavigationRailItem(
+                    selected = selected == index,
+                    onClick = { onSelected(index) },
+                    icon = { Icon(tab.icon, contentDescription = null) },
+                    label = { Text(tab.title) },
+                    alwaysShowLabel = true,
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = GoogleBlueDark,
+                        selectedTextColor = GoogleBlueDark,
+                        indicatorColor = GoogleBlue.copy(alpha = 0.14f),
+                        unselectedIconColor = MutedInk,
+                        unselectedTextColor = MutedInk
+                    )
+                )
+            }
         }
     }
 }
@@ -454,7 +480,7 @@ private fun AppHeader(
 }
 
 @Composable
-private fun DashboardScreen(
+internal fun DashboardScreen(
     bottomInset: Dp,
     config: AppConfig,
     activeServerName: String,
@@ -478,17 +504,9 @@ private fun DashboardScreen(
     onStop: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = bottomInset)
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("快捷管理", style = MaterialTheme.typography.displaySmall)
-        Text("当前服务器：$activeServerName。通过本机 SSH 安全通道管理，目标不会直接暴露到公网。", color = MutedInk)
-        Spacer(Modifier.height(2.dp))
+    ConsoleScrollColumn(bottomInset) {
+        Text("快捷管理", style = MaterialTheme.typography.headlineSmall)
+        if (serverProfile == null) Text(activeServerName, style = MaterialTheme.typography.bodyMedium, color = MutedInk)
         if (showApi || showAstrBot) BoxWithConstraints(Modifier.fillMaxWidth()) {
             val showConsoleCardsSideBySide = maxWidth >= 760.dp
             if (showConsoleCardsSideBySide && showApi && showAstrBot) {
@@ -532,17 +550,29 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenZako
         )
-        if (serverProfile != null) {
-            ProfileConsole.forProfile(serverProfile)?.let { console ->
-                ProfileConsoleCard(
-                    profile = serverProfile,
-                    console = console,
-                    active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id && tunnel.profileConsole?.service == console.service,
-                    busy = busy,
-                    onOpen = { page -> onOpenProfileConsole(serverProfile.id, page) },
-                    onStop = onStopProfileConsole
-                )
-            }
+        val profileConsole = serverProfile?.let(ProfileConsole::forProfile)
+        val connecting = tunnel.connecting && tunnel.cpaProfileId == serverProfile?.id
+        val hasTunnel = tunnel.apiActive || tunnel.astrBotActive || tunnel.zakoActive || tunnel.cpaActive
+        if (serverProfile != null && profileConsole != null) {
+            ResponsivePair(
+                minItemWidth = 300.dp,
+                first = { modifier ->
+                    ProfileConsoleCard(
+                        profile = serverProfile,
+                        console = profileConsole,
+                        active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id &&
+                            tunnel.profileConsole?.service == profileConsole.service,
+                        connecting = connecting,
+                        busy = busy,
+                        modifier = modifier,
+                        onOpen = { page -> onOpenProfileConsole(serverProfile.id, page) },
+                        onStop = onStopProfileConsole
+                    )
+                },
+                second = { modifier ->
+                    ConnectionTargetCard("", config.host.isNotBlank(), hasTunnel, onOpenSettings, onStop, modifier)
+                }
+            )
         }
         if (showSpeedTest) GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -560,28 +590,41 @@ private fun DashboardScreen(
                 Text(tunnel.error, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
-        GlassCard {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Cloud, contentDescription = null, tint = GoogleBlue)
-                    Spacer(Modifier.width(12.dp))
-                    Text("连接目标", style = MaterialTheme.typography.titleMedium)
-                }
-                Text(if (config.host.isBlank()) "尚未配置服务器" else "已配置 SSH 连接参数", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
-                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) { Text("设置") }
+        if (profileConsole == null) {
+            ConnectionTargetCard(activeServerName, config.host.isNotBlank(), hasTunnel, onOpenSettings, onStop)
+        }
+    }
+}
+
+@Composable
+private fun ConnectionTargetCard(
+    serverName: String,
+    configured: Boolean,
+    hasTunnel: Boolean,
+    onOpenSettings: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    GlassCard(modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ConsoleCardHeading(Icons.Rounded.Cloud, "SSH 连接", serverName)
+            Text(
+                if (configured) "连接参数已保存" else "尚未配置服务器",
+                color = MutedInk,
+                style = MaterialTheme.typography.bodySmall
+            )
+            OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("服务器设置")
             }
-        if (tunnel.apiActive || tunnel.astrBotActive || tunnel.zakoActive || tunnel.cpaActive) {
-                Spacer(Modifier.height(12.dp))
+            if (hasTunnel) {
                 HorizontalDivider(color = Hairline)
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Icon(Icons.Rounded.PowerSettingsNew, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("停止全部通道")
+                    Text("停止全部通道", textAlign = TextAlign.Center)
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -590,55 +633,70 @@ private fun ProfileConsoleCard(
     profile: CpaServerProfile,
     console: ProfileConsole,
     active: Boolean,
+    connecting: Boolean,
     busy: Boolean,
+    modifier: Modifier,
     onOpen: (ProfileConsolePage) -> Unit,
     onStop: () -> Unit
 ) {
-    GlassCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Memory, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(27.dp))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(console.title, style = MaterialTheme.typography.titleMedium)
-                Text(profile.name, color = MutedInk, style = MaterialTheme.typography.bodySmall)
-            }
-            StatusBadge(active, if (active) "已连接" else "待机")
-        }
-        Spacer(Modifier.height(12.dp))
-        val mainPage = when (console) {
-            ProfileConsole.CPA -> ProfileConsolePage.CPA
-            ProfileConsole.SEARXNG, ProfileConsole.SEARXNG_CONFIG -> ProfileConsolePage.SEARXNG_HOME
-        }
-        FilledTonalButton(
-            onClick = { onOpen(mainPage) },
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        ) {
-            Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("打开 ${mainPage.title}")
-        }
-        if (console.service == ServerService.SEARXNG) {
-            FilledTonalButton(
-                onClick = { onOpen(ProfileConsolePage.SEARXNG_SETTINGS) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text(ProfileConsolePage.SEARXNG_SETTINGS.title) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (page in listOf(ProfileConsolePage.SEARXNG_PREFERENCES, ProfileConsolePage.SEARXNG_STATS)) {
-                    OutlinedButton(
-                        onClick = { onOpen(page) },
-                        enabled = !busy,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-                    ) {
-                        Text(page.title)
+    GlassCard(modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val isSearch = console.service == ServerService.SEARXNG
+            ConsoleCardHeading(Icons.Rounded.Memory, if (isSearch) "SearXNG" else console.title, profile.name)
+            if (connecting || active) StatusBadge(active, if (connecting) "连接中" else "已连接")
+            if (isSearch) {
+                ResponsivePair(
+                    minItemWidth = 124.dp,
+                    first = { buttonModifier ->
+                        Button(
+                            onClick = { onOpen(ProfileConsolePage.SEARXNG_HOME) },
+                            enabled = !busy,
+                            modifier = buttonModifier.heightIn(min = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) { Text("打开搜索", textAlign = TextAlign.Center) }
+                    },
+                    second = { buttonModifier ->
+                        FilledTonalButton(
+                            onClick = { onOpen(ProfileConsolePage.SEARXNG_SETTINGS) },
+                            enabled = !busy,
+                            modifier = buttonModifier.heightIn(min = 48.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) { Text(ProfileConsolePage.SEARXNG_SETTINGS.title, textAlign = TextAlign.Center) }
                     }
+                )
+                ResponsivePair(
+                    minItemWidth = 124.dp,
+                    first = { buttonModifier ->
+                        OutlinedButton(
+                            onClick = { onOpen(ProfileConsolePage.SEARXNG_PREFERENCES) },
+                            enabled = !busy,
+                            modifier = buttonModifier.heightIn(min = 48.dp)
+                        ) { Text("偏好设置", textAlign = TextAlign.Center) }
+                    },
+                    second = { buttonModifier ->
+                        OutlinedButton(
+                            onClick = { onOpen(ProfileConsolePage.SEARXNG_STATS) },
+                            enabled = !busy,
+                            modifier = buttonModifier.heightIn(min = 48.dp)
+                        ) { Text("引擎状态", textAlign = TextAlign.Center) }
+                    }
+                )
+            }
+            if (!isSearch) {
+                Button(
+                    onClick = { onOpen(ProfileConsolePage.CPA) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("打开管理控制台", textAlign = TextAlign.Center)
                 }
             }
-        }
-        if (active) {
-            OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("断开 ${console.service.displayName} 通道")
+            if (active) {
+                OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("断开当前通道", textAlign = TextAlign.Center)
+                }
             }
         }
     }
@@ -724,7 +782,7 @@ private fun ActionCard(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+        Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)) {
             if (!enabled) CircularProgressIndicator(modifier = Modifier.size(19.dp), strokeWidth = 2.dp)
             else Icon(Icons.Rounded.PlayArrow, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -779,7 +837,7 @@ private fun TerminalScreen(output: String, busy: Boolean, bottomInset: Dp, onRun
 }
 
 @Composable
-private fun SettingsScreen(
+internal fun SettingsScreen(
     bottomInset: Dp,
     config: AppConfig,
     showDefaultConnection: Boolean,
@@ -847,40 +905,51 @@ private fun SettingsScreen(
             dismissButton = { OutlinedButton(onClick = { confirmingKeyReplacement = null }) { Text("取消") } }
         )
     }
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottomInset).padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("服务器选择", style = MaterialTheme.typography.headlineSmall)
-        Text("选择阿里云或甲骨文后，已配置的连接操作会使用该服务器各自保存的 SSH 私钥。", color = MutedInk)
-        GlassCard {
-            Text("当前服务器", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-            val activeProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
-            Box(Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { serverPickerExpanded = true },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(activeProfile?.let { "甲骨文 · ${it.name}" } ?: "阿里云", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = "选择当前服务器")
-                }
-                DropdownMenu(expanded = serverPickerExpanded, onDismissRequest = { serverPickerExpanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text("阿里云（原有连接和私钥）") },
-                        onClick = { serverPickerExpanded = false; onSelectActiveServer(null) }
-                    )
-                    cpaProfiles.forEach { profile ->
-                        DropdownMenuItem(
-                            text = { Text("甲骨文 · ${profile.name}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            onClick = { serverPickerExpanded = false; onSelectActiveServer(profile.id) }
-                        )
+    ConsoleScrollColumn(bottomInset) {
+        Text("服务器设置", style = MaterialTheme.typography.headlineSmall)
+        val activeProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
+        ResponsivePair(
+            minItemWidth = 280.dp,
+            first = { modifier ->
+                GlassCard(modifier) {
+                    ConsoleCardHeading(Icons.Rounded.Cloud, "当前服务器", activeProfile?.name ?: "阿里云")
+                    Spacer(Modifier.height(10.dp))
+                    Box(Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { serverPickerExpanded = true },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) {
+                            Text("切换服务器", modifier = Modifier.weight(1f))
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                        }
+                        DropdownMenu(expanded = serverPickerExpanded, onDismissRequest = { serverPickerExpanded = false }) {
+                            DropdownMenuItem(
+                                text = { Text("阿里云") },
+                                onClick = { serverPickerExpanded = false; onSelectActiveServer(null) }
+                            )
+                            cpaProfiles.forEach { profile ->
+                                DropdownMenuItem(
+                                    text = { Text(profile.name) },
+                                    onClick = { serverPickerExpanded = false; onSelectActiveServer(profile.id) }
+                                )
+                            }
+                        }
                     }
                 }
+            },
+            second = { modifier ->
+                GlassCard(modifier) {
+                    ConsoleCardHeading(Icons.Rounded.FileOpen, "连接文件", "选择已授权的 .key 文件即可接入")
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = onImportConnection,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) { Text("导入服务器连接文件", textAlign = TextAlign.Center) }
+                }
             }
-        }
+        )
         if (showDefaultConnection) GlassCard {
             Text("阿里云连接设置", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
@@ -892,143 +961,82 @@ private fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = config.user,
-                    onValueChange = { value -> onUpdate { it.copy(user = value) } },
-                    label = { Text("SSH 用户名") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                PortField("SSH 端口", config.sshPort, Modifier.weight(0.72f)) { port -> onUpdate { it.copy(sshPort = port) } }
-            }
+            ResponsivePair(
+                minItemWidth = 140.dp,
+                first = { modifier ->
+                    OutlinedTextField(
+                        value = config.user,
+                        onValueChange = { value -> onUpdate { it.copy(user = value) } },
+                        label = { Text("SSH 用户名") },
+                        singleLine = true,
+                        modifier = modifier
+                    )
+                },
+                second = { modifier ->
+                    PortField("SSH 端口", config.sshPort, modifier) { port -> onUpdate { it.copy(sshPort = port) } }
+                }
+            )
         }
         if (showDefaultConnection) GlassCard {
             Text("本机端口", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PortField("API", config.apiLocalPort, Modifier.weight(1f)) { port -> onUpdate { it.copy(apiLocalPort = port) } }
-                PortField("AstrBot", config.astrBotLocalPort, Modifier.weight(1f)) { port -> onUpdate { it.copy(astrBotLocalPort = port) } }
+            ResponsivePair(
+                minItemWidth = 130.dp,
+                first = { modifier ->
+                    PortField("API", config.apiLocalPort, modifier) { port -> onUpdate { it.copy(apiLocalPort = port) } }
+                },
+                second = { modifier ->
+                    PortField("AstrBot", config.astrBotLocalPort, modifier) { port -> onUpdate { it.copy(astrBotLocalPort = port) } }
+                }
+            )
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("其他服务器", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            OutlinedButton(
+                onClick = { addCpaProfile = true; editingCpaProfile = null },
+                enabled = !busy && cpaProfiles.size < 16,
+                modifier = Modifier.heightIn(min = 48.dp)
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("添加")
             }
         }
-        GlassCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("其他服务器", style = MaterialTheme.typography.titleMedium)
-                    Text("阿里云保留原连接，Oracle 档案独立保存私钥和主机指纹", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-                }
-                IconButton(onClick = { addCpaProfile = true; editingCpaProfile = null }, enabled = cpaProfiles.size < 16) {
-                    Icon(Icons.Rounded.Add, contentDescription = "添加服务器")
-                }
-            }
-            FilledTonalButton(
-                onClick = onImportConnection,
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            ) { Text("导入服务器连接文件") }
-            if (cpaProfiles.isEmpty()) {
-                Text("尚未添加其他服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-            }
-            cpaProfiles.forEach { profile ->
-                HorizontalDivider(color = Hairline)
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(profile.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val keyStatus = when {
-                            profile.publicKey.isNotBlank() -> "手机私钥已加密 · 公钥待登记"
-                            profile.id in cpaKeyProfiles -> "私钥已加密"
-                            else -> "尚未生成密钥"
-                        }
-                        val hostStatus = if (profile.hasTrustedHost) "指纹已固定" else "需确认指纹"
-                        val services = profile.configuredServices.joinToString("、") { it.displayName }
-                        Text("$services · $keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (activeServerId == profile.id) {
-                        Text("当前", color = GoogleBlueDark, style = MaterialTheme.typography.labelMedium)
-                    }
-                    IconButton(onClick = { editingCpaProfile = profile; addCpaProfile = false }) {
-                        Icon(Icons.Rounded.Edit, contentDescription = "编辑 ${profile.name}")
-                    }
-                    IconButton(onClick = { confirmingDelete = profile }) {
-                        Icon(Icons.Rounded.DeleteOutline, contentDescription = "删除 ${profile.name}")
-                    }
-                }
-                FilledTonalButton(
-                    onClick = {
+        if (cpaProfiles.isEmpty()) GlassCard {
+            Text("导入连接文件后，服务器会显示在这里。", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+        }
+        val profileCard: @Composable (CpaServerProfile, Modifier) -> Unit = { profile, modifier ->
+            key(profile.id) {
+                ServerProfileCard(
+                    profile = profile,
+                    current = profile.id == activeServerId,
+                    hasKey = profile.id in cpaKeyProfiles,
+                    busy = busy,
+                    modifier = modifier,
+                    onSelect = { onSelectActiveServer(profile.id) },
+                    onEdit = { editingCpaProfile = profile; addCpaProfile = false },
+                    onDelete = { confirmingDelete = profile },
+                    onImport = { onImportCpaKey(profile.id) },
+                    onGenerate = {
                         if (profile.id in cpaKeyProfiles) confirmingKeyReplacement = profile
                         else onGenerateCpaKey(profile.id, false)
                     },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Rounded.Key, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (profile.id in cpaKeyProfiles) "生成并替换手机密钥" else "在手机生成 SSH 密钥")
-                }
-                if (profile.publicKey.isNotBlank()) {
-                    Text("公钥 · 需在服务器登记后才能登录", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        CpaSshKeyGenerator.fingerprint(profile.publicKey),
-                        color = MutedInk,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                            .background(Color(0xFFF5F8FC), RoundedCornerShape(6.dp))
-                            .border(1.dp, Hairline, RoundedCornerShape(6.dp))
-                            .padding(10.dp)
-                    ) {
-                        SelectionContainer {
-                            Text(
-                                profile.publicKey,
-                                modifier = Modifier.fillMaxWidth(),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                color = Ink
-                            )
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = { onCopyCpaPublicKey(profile.id) },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("复制公钥")
-                    }
-                }
-                OutlinedButton(
-                    onClick = { onImportCpaKey(profile.id) },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Rounded.Key, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (profile.id in cpaKeyProfiles) "导入其他私钥" else "导入已有私钥")
-                }
-                if (profile.id in cpaKeyProfiles) {
-                    OutlinedButton(
-                        onClick = { onClearCpaKey(profile.id) },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("移除此档案私钥") }
-                }
-                OutlinedButton(
-                    onClick = { onTestCpaProfile(profile.id) },
-                    enabled = !busy && profile.id == activeServerId && profile.id in cpaKeyProfiles,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Rounded.Security, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (profile.hasTrustedHost) "重新测试主机指纹" else "测试并确认主机指纹")
-                }
+                    onCopy = { onCopyCpaPublicKey(profile.id) },
+                    onClear = { onClearCpaKey(profile.id) },
+                    onTest = { onTestCpaProfile(profile.id) }
+                )
+            }
+        }
+        cpaProfiles.chunked(2).forEach { pair ->
+            val second = pair.getOrNull(1)
+            if (second == null) {
+                profileCard(pair.first(), Modifier.fillMaxWidth())
+            } else {
+                ResponsivePair(
+                    minItemWidth = 280.dp,
+                    first = { profileCard(pair.first(), it) },
+                    second = { profileCard(second, it) }
+                )
             }
         }
         if (showDefaultConnection) {
@@ -1080,6 +1088,153 @@ private fun SettingsScreen(
         }
         }
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun ServerProfileCard(
+    profile: CpaServerProfile,
+    current: Boolean,
+    hasKey: Boolean,
+    busy: Boolean,
+    modifier: Modifier,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onImport: () -> Unit,
+    onGenerate: () -> Unit,
+    onCopy: () -> Unit,
+    onClear: () -> Unit,
+    onTest: () -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val services = profile.configuredServices.joinToString("、") { it.displayName }
+    val keyStatus = when {
+        profile.publicKey.isNotBlank() -> "公钥待登记"
+        !hasKey -> "需导入私钥"
+        !profile.hasTrustedHost -> "需核对主机指纹"
+        else -> "已保存私钥和主机指纹"
+    }
+    GlassCard(modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ConsoleCardHeading(Icons.Rounded.Cloud, profile.name, services)
+            Text(keyStatus, color = MutedInk, style = MaterialTheme.typography.bodySmall)
+            if (current) {
+                Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
+                    StatusBadge(true, "当前服务器")
+                }
+            } else {
+                FilledTonalButton(onClick = onSelect, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("切换到此服务器")
+                }
+            }
+            TextButton(onClick = { expanded = !expanded }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(if (expanded) "收起管理选项" else "管理档案")
+                Spacer(Modifier.width(6.dp))
+                Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null)
+            }
+            if (expanded) {
+                HorizontalDivider(color = Hairline)
+                OutlinedButton(onClick = onImport, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(if (hasKey) "导入其他私钥" else "导入已有私钥")
+                }
+                OutlinedButton(onClick = onGenerate, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(if (hasKey) "生成并替换手机密钥" else "在手机生成 SSH 密钥", textAlign = TextAlign.Center)
+                }
+                if (profile.publicKey.isNotBlank()) {
+                    Text(
+                        CpaSshKeyGenerator.fingerprint(profile.publicKey),
+                        color = MutedInk,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp
+                    )
+                    SelectionContainer {
+                        Text(profile.publicKey, color = Ink, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
+                    OutlinedButton(onClick = onCopy, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("复制公钥")
+                    }
+                }
+                OutlinedButton(
+                    onClick = onTest,
+                    enabled = !busy && current && hasKey,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    Text(if (profile.hasTrustedHost) "重新测试主机指纹" else "测试并确认主机指纹", textAlign = TextAlign.Center)
+                }
+                if (hasKey) {
+                    OutlinedButton(onClick = onClear, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text("移除此档案私钥")
+                    }
+                }
+                ResponsivePair(
+                    minItemWidth = 120.dp,
+                    first = {
+                        OutlinedButton(onClick = onEdit, enabled = !busy, modifier = it.heightIn(min = 48.dp)) {
+                            Text("编辑档案")
+                        }
+                    },
+                    second = {
+                        OutlinedButton(onClick = onDelete, enabled = !busy, modifier = it.heightIn(min = 48.dp)) {
+                            Text("删除档案", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConsoleCardHeading(icon: ImageVector, title: String, subtitle: String) {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(shape = RoundedCornerShape(13.dp), color = GoogleBlueSoft) {
+            Icon(icon, contentDescription = null, tint = GoogleBlueDark, modifier = Modifier.padding(10.dp).size(22.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = Ink)
+            if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MutedInk)
+        }
+    }
+}
+
+@Composable
+private fun ResponsivePair(
+    minItemWidth: Dp,
+    first: @Composable (Modifier) -> Unit,
+    second: @Composable (Modifier) -> Unit
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gap = 12.dp
+        val scale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        if (maxWidth >= minItemWidth * (2f * scale) + gap) {
+            Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Top) {
+                first(Modifier.weight(1f))
+                second(Modifier.weight(1f))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                first(Modifier.fillMaxWidth())
+                second(Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConsoleScrollColumn(bottomInset: Dp, content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val gutter = when {
+            maxWidth < 360.dp -> 12.dp
+            maxWidth >= 720.dp -> 24.dp
+            else -> 18.dp
+        }
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = gutter, end = gutter, top = 6.dp, bottom = bottomInset + 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
     }
 }
 
