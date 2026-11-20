@@ -118,6 +118,9 @@ object SshEngine {
             return created.apply {
             setConfig("PreferredAuthentications", "publickey")
             setConfig("StrictHostKeyChecking", if (allowUntrusted) "no" else "yes")
+            if (!allowUntrusted && config.trustedHostKeyType == "ssh-ed25519") {
+                setConfig("server_host_key", "ssh-ed25519")
+            }
             // Keep JSch's complete conventional default set. Only optional post-quantum KEX is
             // omitted from the mobile build; current OpenSSH ECDH/X25519/DH and AES choices remain.
             setConfig(

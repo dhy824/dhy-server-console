@@ -265,6 +265,35 @@ class CpaProfileStore(context: Context) {
         persist(next, selected)
     }
 
+    internal fun importConnection(profile: CpaServerProfile, saveKey: (String) -> Unit): CpaServerProfile {
+        val current = current()
+        val previous = current.firstOrNull {
+            it.host.equals(profile.host, ignoreCase = true) && it.sshPort == profile.sshPort &&
+                it.user == profile.user && it.configuredServices == profile.configuredServices
+        }
+        require(previous == null || !previous.hasTrustedHost ||
+            previous.trustedHostKeyType != profile.trustedHostKeyType ||
+            previous.trustedHostKey == profile.trustedHostKey) {
+            "连接文件与已保存的服务器指纹不一致。"
+        }
+        val name = previous?.name ?: generateSequence(1) { it + 1 }
+            .map { if (it == 1) profile.name else profile.name.take(55) + " ($it)" }
+            .first { name -> current.none { it.name.equals(name, ignoreCase = true) } }
+        val imported = profile.copy(
+            id = previous?.id ?: profile.id,
+            name = name,
+            localHostOctet = previous?.localHostOctet
+        )
+        val next = CpaProfileCodec.assignLocalHosts(
+            current.filterNot { it.id == imported.id } + imported,
+            readRetiredHostOctets()
+        )
+        CpaProfileCodec.validate(next)
+        saveKey(imported.id)
+        persist(next, imported.id, imported.id)
+        return next.first { it.id == imported.id }
+    }
+
     fun select(id: String?) {
         require(id == null || mutableProfiles.value.any { it.id == id }) { "所选 CPA 服务器档案不存在。" }
         persist(mutableProfiles.value, id)

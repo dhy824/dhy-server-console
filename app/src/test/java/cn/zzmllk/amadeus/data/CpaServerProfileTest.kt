@@ -149,6 +149,36 @@ class CpaServerProfileTest {
     }
 
     @Test
+    fun connectionFileDefinesOnlyTheIntendedServiceAndPinnedHost() {
+        val hostKey = java.util.Base64.getEncoder().encodeToString(
+            byteArrayOf(0, 0, 0, 11) + "ssh-ed25519".encodeToByteArray() +
+                byteArrayOf(0, 0, 0, 32) + ByteArray(32) { 7 }
+        )
+        val key = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + "a".repeat(64)
+        fun metadata(service: String, port: String = "22") =
+            """{"name":"Oracle","host":"oracle.example","port":$port,"user":"forward-only","service":"$service","hostKey":"$hostKey"}"""
+        fun file(metadata: String) = ("AMADEUS-SSH/1\n" + metadata + "\n" + key).encodeToByteArray()
+
+        for ((kind, service) in listOf("cpa" to ServerService.CPA, "searxng" to ServerService.SEARXNG)) {
+            val imported = ServerConnectionFile.decode(file(metadata(kind)))
+            assertEquals(setOf(service), imported.profile.configuredServices)
+            assertEquals("ssh-ed25519", imported.profile.trustedHostKeyType)
+            assertEquals(hostKey, imported.profile.trustedHostKey)
+            assertEquals("forward-only", imported.profile.user)
+            org.junit.Assert.assertArrayEquals(key.encodeToByteArray(), imported.privateKey)
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            ServerConnectionFile.decode(file(metadata("terminal")))
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            ServerConnectionFile.decode(file(metadata("cpa", "65536")))
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            ServerConnectionFile.decode(key.encodeToByteArray())
+        }
+    }
+
+    @Test
     fun consoleRouteIsTheCliProxyManagementPage() {
         assertEquals("/management.html", CPA_MANAGEMENT_PATH)
     }

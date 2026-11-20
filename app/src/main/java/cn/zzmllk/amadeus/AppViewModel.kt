@@ -17,11 +17,13 @@ import cn.zzmllk.amadeus.data.CpaServerProfile
 import cn.zzmllk.amadeus.data.ProfileConsolePage
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
+import cn.zzmllk.amadeus.data.ServerConnectionFile
 import cn.zzmllk.amadeus.data.ServerService
 import cn.zzmllk.amadeus.service.TunnelRuntime
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.ssh.HostProbe
 import cn.zzmllk.amadeus.ssh.SshEngine
+import cn.zzmllk.amadeus.ssh.tunnelFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runInterruptible
@@ -187,6 +189,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableMessage.value = "服务器档案已删除。"
         } catch (error: Exception) {
             mutableMessage.value = error.message ?: "无法删除 服务器档案。"
+        }
+    }
+
+    fun importServerConnection(uri: Uri, onImported: () -> Unit) {
+        viewModelScope.launch {
+            runBusy(null) {
+                val connection = withContext(Dispatchers.IO) {
+                    val bytes = getApplication<Application>().contentResolver.openInputStream(uri)?.use(::readLimited)
+                        ?: error("无法读取服务器连接文件。")
+                    try { ServerConnectionFile.decode(bytes) } finally { bytes.fill(0) }
+                }
+                val profile = try {
+                    runInterruptible(Dispatchers.IO) {
+                        val probeKey = connection.privateKey.copyOf()
+                        try {
+                            SshEngine.connect(connection.profile.toAppConfig(), probeKey).disconnect()
+                        } catch (error: Exception) {
+                            throw IllegalStateException(tunnelFailure(error, "验证连接文件"))
+                        } finally {
+                            probeKey.fill(0)
+                        }
+                    }
+                    stopAllTunnels()
+                    cpaProfileStore.importConnection(connection.profile) { id ->
+                        cpaKeyStore.save(id, connection.privateKey)
+                    }
+                } finally {
+                    connection.privateKey.fill(0)
+                }
+                mutableCpaKeys.value = mutableCpaKeys.value + profile.id
+                mutableSubscriptions.value = ""
+                mutableSubscriptionLink.value = null
+                mutableMessage.value = "已导入 ${profile.name}，可直接连接。"
+                onImported()
+            }
         }
     }
 

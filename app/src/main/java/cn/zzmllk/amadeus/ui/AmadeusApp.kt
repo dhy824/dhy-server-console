@@ -163,6 +163,9 @@ fun AmadeusApp(
     val importKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importPrivateKey(uri)
     }
+    val importConnection = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importServerConnection(uri) { selected = AppTab.HOME.ordinal }
+    }
     var cpaKeyImportTarget by rememberSaveable { mutableStateOf<String?>(null) }
     val importCpaKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val profileId = cpaKeyImportTarget
@@ -296,6 +299,7 @@ fun AmadeusApp(
                                     cpaKeyProfiles = cpaKeyProfiles,
                                     activeServerId = activeServerId,
                                     onSelectActiveServer = viewModel::selectActiveServer,
+                                    onImportConnection = { importConnection.launch(arrayOf("*/*")) },
                                     onSaveCpaProfile = viewModel::saveCpaProfile,
                                     onDeleteCpaProfile = viewModel::deleteCpaProfile,
                                     onTestCpaProfile = viewModel::testCpaProfile,
@@ -790,6 +794,7 @@ private fun SettingsScreen(
     cpaKeyProfiles: Set<String>,
     activeServerId: String?,
     onSelectActiveServer: (String?) -> Unit,
+    onImportConnection: () -> Unit,
     onSaveCpaProfile: (CpaServerProfile) -> Boolean,
     onDeleteCpaProfile: (String) -> Unit,
     onTestCpaProfile: (String) -> Unit,
@@ -916,6 +921,11 @@ private fun SettingsScreen(
                     Icon(Icons.Rounded.Add, contentDescription = "添加服务器")
                 }
             }
+            FilledTonalButton(
+                onClick = onImportConnection,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) { Text("导入服务器连接文件") }
             if (cpaProfiles.isEmpty()) {
                 Text("尚未添加其他服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
             }
