@@ -17,6 +17,16 @@ class ConsoleOriginTest {
     }
 
     @Test
+    fun searchResultLinksAreLimitedToHttpWebsites() {
+        assertTrue(isExternalSearchResultUrl("https://www.example.org/article?q=search"))
+        assertFalse(isExternalSearchResultUrl("https://name@www.example.org/"))
+        assertFalse(isExternalSearchResultUrl("http://127.0.0.3:39127/"))
+        assertFalse(isExternalSearchResultUrl("http://server.local/"))
+        assertFalse(isExternalSearchResultUrl("https://[::1]/"))
+        assertFalse(isExternalSearchResultUrl("intent://www.example.org/"))
+    }
+
+    @Test
     fun consoleUrlRejectsNonLoopbackHostsAndUserInfo() {
         assertTrue(isAllowedConsoleUrl("http://127.0.0.2:39127/"))
         assertTrue(isAllowedConsoleUrl("http://127.0.0.1:39127/"))

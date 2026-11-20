@@ -109,6 +109,28 @@ class CpaServerProfileTest {
     }
 
     @Test
+    fun searchProfileRoundTripsWithItsOwnLoopbackAndService() {
+        val cpa = profile(localHostOctet = 2)
+        val search = profile(name = "Search", localHostOctet = 3).copy(
+            configuredServices = setOf(ServerService.SEARXNG)
+        )
+        val restored = CpaProfileCodec.decode(CpaProfileCodec.encode(listOf(cpa, search)))
+        val console = requireNotNull(ProfileConsole.forProfile(restored.last()))
+
+        assertEquals(listOf(cpa, search), restored)
+        assertEquals(ProfileConsole.CPA, ProfileConsole.forProfile(restored.first()))
+        assertEquals(ProfileConsole.SEARXNG, console)
+        assertEquals(18888, console.remotePort)
+        assertEquals("/preferences", console.probePath)
+        assertEquals("http://127.0.0.3:39127/", console.localUrl(restored.last().localHost, 39127))
+        assertFalse(ServerService.SEARXNG in aliyunServices)
+        assertFalse(restored.last().supports(ServerService.CPA))
+        assertTrue(runCatching {
+            CpaProfileCodec.validate(listOf(search.copy(configuredServices = setOf(ServerService.SEARXNG, ServerService.CPA))))
+        }.isFailure)
+    }
+
+    @Test
     fun consoleRouteIsTheCliProxyManagementPage() {
         assertEquals("/management.html", CPA_MANAGEMENT_PATH)
     }

@@ -57,6 +57,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -109,7 +110,9 @@ import cn.zzmllk.amadeus.R
 import cn.zzmllk.amadeus.data.AppConfig
 import cn.zzmllk.amadeus.data.CpaSshKeyGenerator
 import cn.zzmllk.amadeus.data.CpaServerProfile
+import cn.zzmllk.amadeus.data.ProfileConsole
 import cn.zzmllk.amadeus.data.ServerService
+import cn.zzmllk.amadeus.data.aliyunServices
 import cn.zzmllk.amadeus.service.TunnelState
 
 private enum class AppTab(val title: String, val icon: ImageVector) {
@@ -131,7 +134,7 @@ fun AmadeusApp(
     val activeServerProfile = cpaProfiles.firstOrNull { it.id == activeServerId }
     val activeServerName = activeServerProfile?.let { "甲骨文 · ${it.name}" } ?: "阿里云"
     val activeConfig = activeServerProfile?.toAppConfig() ?: config
-    val configuredServices = activeServerProfile?.configuredServices ?: ServerService.entries.toSet()
+    val configuredServices = activeServerProfile?.configuredServices ?: aliyunServices
     val visibleTabs = remember(configuredServices) {
         buildList {
             add(AppTab.HOME)
@@ -248,21 +251,19 @@ fun AmadeusApp(
                                     config = activeConfig,
                                     activeServerName = activeServerName,
                                     tunnel = tunnel,
-                                    cpaProfiles = cpaProfiles,
-                                    selectedCpaProfileId = activeServerId,
+                                    serverProfile = activeServerProfile,
                                     showApi = ServerService.API in configuredServices,
                                     showAstrBot = ServerService.ASTRBOT in configuredServices,
                                     showZako = ServerService.ZAKO in configuredServices,
                                     showReview = ServerService.REVIEW in configuredServices,
                                     showDistillation = ServerService.DISTILLATION in configuredServices,
                                     showSpeedTest = ServerService.SPEED_TEST in configuredServices,
-                                    showCpa = activeServerProfile?.supports(ServerService.CPA) == true,
                                     busy = busy,
                                     onOpenApi = { viewModel.open(ConsoleTarget.API) },
                                     onOpenAstrBot = { viewModel.open(ConsoleTarget.ASTRBOT) },
                                     onOpenZako = { viewModel.open(ConsoleTarget.ZAKO) },
-                                    onOpenCpa = { viewModel.openCpaConsole(activeServerId) },
-                                    onStopCpa = viewModel::stopCpaTunnel,
+                                    onOpenProfileConsole = viewModel::openProfileConsole,
+                                    onStopProfileConsole = viewModel::stopCpaTunnel,
                                     onOpenDistillation = { viewModel.open(ConsoleTarget.ASTRBOT, analysis = true) },
                                     onOpenReview = { viewModel.open(ConsoleTarget.ASTRBOT, review = true) },
                                     onSpeed = { confirmSpeed = true },
@@ -453,21 +454,19 @@ private fun DashboardScreen(
     config: AppConfig,
     activeServerName: String,
     tunnel: TunnelState,
-    cpaProfiles: List<CpaServerProfile>,
-    selectedCpaProfileId: String?,
+    serverProfile: CpaServerProfile?,
     showApi: Boolean,
     showAstrBot: Boolean,
     showZako: Boolean,
     showReview: Boolean,
     showDistillation: Boolean,
     showSpeedTest: Boolean,
-    showCpa: Boolean,
     busy: Boolean,
     onOpenApi: () -> Unit,
     onOpenAstrBot: () -> Unit,
     onOpenZako: () -> Unit,
-    onOpenCpa: () -> Unit,
-    onStopCpa: () -> Unit,
+    onOpenProfileConsole: (String, ProfileConsole) -> Unit,
+    onStopProfileConsole: () -> Unit,
     onOpenDistillation: () -> Unit,
     onOpenReview: () -> Unit,
     onSpeed: () -> Unit,
@@ -528,15 +527,18 @@ private fun DashboardScreen(
             enabled = !busy,
             onClick = onOpenZako
         )
-        if (showCpa) CpaConsoleCard(
-            profiles = cpaProfiles,
-            selectedId = selectedCpaProfileId,
-            active = tunnel.cpaActive,
-            busy = busy,
-            onOpen = onOpenCpa,
-            onStop = onStopCpa,
-            onManage = onOpenSettings
-        )
+        if (serverProfile != null) {
+            ProfileConsole.forProfile(serverProfile)?.let { console ->
+                ProfileConsoleCard(
+                    profile = serverProfile,
+                    console = console,
+                    active = tunnel.cpaActive && tunnel.cpaProfileId == serverProfile.id && tunnel.profileConsole == console,
+                    busy = busy,
+                    onOpen = { onOpenProfileConsole(serverProfile.id, console) },
+                    onStop = onStopProfileConsole
+                )
+            }
+        }
         if (showSpeedTest) GlassCard {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -579,47 +581,38 @@ private fun DashboardScreen(
 }
 
 @Composable
-private fun CpaConsoleCard(
-    profiles: List<CpaServerProfile>,
-    selectedId: String?,
+private fun ProfileConsoleCard(
+    profile: CpaServerProfile,
+    console: ProfileConsole,
     active: Boolean,
     busy: Boolean,
     onOpen: () -> Unit,
-    onStop: () -> Unit,
-    onManage: () -> Unit
+    onStop: () -> Unit
 ) {
-    val selected = profiles.firstOrNull { it.id == selectedId }
     GlassCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Memory, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(27.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("当前服务器控制台", style = MaterialTheme.typography.titleMedium)
-                Text("甲骨文当前已配置 CPA", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                Text(console.title, style = MaterialTheme.typography.titleMedium)
+                Text(profile.name, color = MutedInk, style = MaterialTheme.typography.bodySmall)
             }
             StatusBadge(active, if (active) "已连接" else "待机")
         }
         Spacer(Modifier.height(12.dp))
-        Text(selected?.name ?: "请选择已配置 CPA 的服务器", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(8.dp))
         FilledTonalButton(
             onClick = onOpen,
-            enabled = selected != null && !busy,
+            enabled = !busy,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
             Icon(Icons.Rounded.OpenInBrowser, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("打开所选服务器的 CPA 管理控制台")
+            Text("打开 ${console.title}")
         }
         if (active) {
             OutlinedButton(onClick = onStop, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("断开 CPA 通道")
+                Text("断开 ${console.service.displayName} 通道")
             }
-        }
-        if (profiles.isEmpty()) {
-            Spacer(Modifier.height(4.dp))
-            Text("请在设置中选择已配置 CPA 管理控制台的服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = onManage, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("管理 CPA 服务器") }
         }
     }
 }
@@ -917,7 +910,8 @@ private fun SettingsScreen(
                             else -> "尚未生成密钥"
                         }
                         val hostStatus = if (profile.hasTrustedHost) "指纹已固定" else "需确认指纹"
-                        Text("仅 CPA · $keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                        val services = profile.configuredServices.joinToString("、") { it.displayName }
+                        Text("$services · $keyStatus · $hostStatus", color = MutedInk, style = MaterialTheme.typography.bodySmall)
                     }
                     if (activeServerId == profile.id) {
                         Text("当前", color = GoogleBlueDark, style = MaterialTheme.typography.labelMedium)
@@ -1067,6 +1061,7 @@ private fun CpaProfileEditorDialog(
     var host by remember(initial?.id) { mutableStateOf(initial?.host.orEmpty()) }
     var user by remember(initial?.id) { mutableStateOf(initial?.user ?: defaultUser) }
     var port by remember(initial?.id) { mutableStateOf((initial?.sshPort ?: 22).toString()) }
+    var console by remember(initial?.id) { mutableStateOf(ProfileConsole.CPA) }
     var validationError by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1077,6 +1072,18 @@ private fun CpaProfileEditorDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("每台服务器独立保存 SSH 私钥和主机指纹。地址或端口变更后需重新确认主机指纹。", style = MaterialTheme.typography.bodySmall, color = MutedInk)
+                if (initial == null) {
+                    Text("网页服务", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ProfileConsole.entries.forEach { option ->
+                            FilterChip(
+                                selected = option == console,
+                                onClick = { console = option },
+                                label = { Text(option.service.displayName) }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(name, { name = it.take(64) }, label = { Text("服务器名称") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(host, { host = it.take(253) }, label = { Text("地址或域名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(user, { user = it.take(64) }, label = { Text("SSH 用户名") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -1099,7 +1106,8 @@ private fun CpaProfileEditorDialog(
                             name = name,
                             host = host,
                             user = user,
-                            sshPort = parsedPort
+                            sshPort = parsedPort,
+                            configuredServices = initial?.configuredServices ?: setOf(console.service)
                         )
                     )
                 }

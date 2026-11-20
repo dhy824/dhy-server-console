@@ -23,7 +23,26 @@ enum class ServerService(val storageKey: String, val displayName: String) {
     SPEED_TEST("speed_test", "节点测速"),
     REVIEW("review", "审核"),
     DISTILLATION("distillation", "蒸馏"),
-    UPDATES("updates", "服务器更新")
+    UPDATES("updates", "服务器更新"),
+    SEARXNG("searxng", "SearXNG")
+}
+
+enum class ProfileConsole(
+    val service: ServerService,
+    val title: String,
+    val remotePort: Int,
+    val probePath: String,
+    val pagePath: String
+) {
+    CPA(ServerService.CPA, "CPA 管理控制台", 8317, CPA_MANAGEMENT_PATH, CPA_MANAGEMENT_PATH),
+    SEARXNG(ServerService.SEARXNG, "SearXNG 网页", 18888, "/preferences", "/");
+
+    fun localUrl(host: String, port: Int): String = "http://$host:$port$pagePath"
+
+    companion object {
+        fun forProfile(profile: CpaServerProfile): ProfileConsole? =
+            entries.firstOrNull { profile.supports(it.service) }
+    }
 }
 
 data class CpaServerProfile(
@@ -162,7 +181,10 @@ object CpaProfileCodec {
             require(profile.apiLocalPort in 1024..65535) { "API 本机端口无效。" }
             require(profile.astrBotLocalPort in 1024..65535) { "AstrBot 本机端口无效。" }
             require(profile.apiLocalPort != profile.astrBotLocalPort) { "API 与 AstrBot 本机端口不能相同。" }
-            require(profile.localHostOctet == null || profile.localHostOctet in 2..17) { "CPA 档案回环地址无效。" }
+            require(profile.localHostOctet == null || profile.localHostOctet in 2..17) { "服务器档案回环地址无效。" }
+            require(!profile.supports(ServerService.SEARXNG) || profile.configuredServices == setOf(ServerService.SEARXNG)) {
+                "SearXNG 需要独立服务器档案。"
+            }
             require(profile.user.matches(Regex("^[A-Za-z0-9._-]{1,64}$"))) { "SSH 用户名格式不正确。" }
             require(profile.publicKey.length <= 8192 && profile.publicKey.none(Char::isISOControl)) {
                 "SSH 公钥文本无效。"

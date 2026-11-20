@@ -51,11 +51,9 @@ import androidx.core.view.doOnLayout
 import androidx.lifecycle.lifecycleScope
 import cn.zzmllk.amadeus.service.TunnelService
 import cn.zzmllk.amadeus.service.TunnelRuntime
-import cn.zzmllk.amadeus.data.CPA_MANAGEMENT_PATH
+import cn.zzmllk.amadeus.data.ProfileConsole
 import cn.zzmllk.amadeus.ui.AmadeusTheme
 import cn.zzmllk.amadeus.ui.enableAmadeusEdgeToEdge
-import cn.zzmllk.amadeus.web.isAllowedConsoleUrl
-import cn.zzmllk.amadeus.web.isSameConsoleOrigin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -76,6 +74,7 @@ class WebConsoleActivity : ComponentActivity() {
         enableAmadeusEdgeToEdge(darkTheme)
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "本机控制台" }
         val url = intent.getStringExtra(EXTRA_URL).orEmpty()
+        val profileConsole = TunnelService.profileConsoleForAction(intent.getStringExtra(EXTRA_TUNNEL_ACTION))
         if (!isAllowedConsoleUrl(url)) {
             finish()
             return
@@ -131,7 +130,7 @@ class WebConsoleActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         AndroidView(
                             factory = {
-                                createWebView(darkTheme, url).also { view ->
+                                createWebView(darkTheme, url, profileConsole).also { view ->
                                     webView = view
                                     view.doOnLayout {
                                         if (view.url == null) view.loadUrl(url)
@@ -150,7 +149,11 @@ class WebConsoleActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(darkTheme: Boolean, initialUrl: String): WebView = WebView(this).apply {
+    private fun createWebView(
+        darkTheme: Boolean,
+        initialUrl: String,
+        console: ProfileConsole?
+    ): WebView = WebView(this).apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -179,24 +182,35 @@ class WebConsoleActivity : ComponentActivity() {
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val destination = request?.url?.toString().orEmpty()
-                return !isSameConsoleOrigin(initialUrl, destination)
+                if (isSameConsoleOrigin(initialUrl, destination)) return false
+                if (console == ProfileConsole.SEARXNG && request != null &&
+                    request.isForMainFrame && request.hasGesture() && isExternalSearchResultUrl(destination)
+                ) {
+                    runCatching { launchBrowser(destination) }.onFailure {
+                        Toast.makeText(this@WebConsoleActivity, "无法打开系统浏览器。", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                return true
             }
         }
     }
 
     private fun openInExternalBrowser(url: String) {
         if (externalBrowserOpening) return
-        val tunnelAction = intent.getStringExtra(EXTRA_TUNNEL_ACTION)
-            ?.takeIf { it in setOf(TunnelService.ACTION_START_API, TunnelService.ACTION_START_ASTRBOT, TunnelService.ACTION_START_ZAKO, TunnelService.ACTION_START_CPA) }
-            ?: return
+        val tunnelAction = intent.getStringExtra(EXTRA_TUNNEL_ACTION) ?: return
+        val console = TunnelService.profileConsoleForAction(tunnelAction)
+        if (console == null && tunnelAction !in setOf(
+                TunnelService.ACTION_START_API, TunnelService.ACTION_START_ASTRBOT, TunnelService.ACTION_START_ZAKO
+            )
+        ) return
         lifecycleScope.launch {
             externalBrowserOpening = true
             Toast.makeText(this@WebConsoleActivity, "正在确认浏览器通道……", Toast.LENGTH_SHORT).show()
             try {
                 val requestId = UUID.randomUUID().toString()
                 requestTunnel(tunnelAction, forceReconnect = false, requestId = requestId)
-                val browserUrl = if (tunnelAction == TunnelService.ACTION_START_CPA) {
-                    awaitCpaTunnel(requestId)
+                val browserUrl = if (console != null) {
+                    awaitProfileTunnel(requestId, console)
                 } else if (tunnelAction != TunnelService.ACTION_START_ZAKO) {
                     var reachable = waitUntilReachable(url, NORMAL_PROBE_TIMEOUT_MS)
                     if (!reachable) {
@@ -209,10 +223,7 @@ class WebConsoleActivity : ComponentActivity() {
                     awaitZakoTunnel(requestId)
                     url
                 }
-                startActivity(
-                    Intent(Intent.ACTION_VIEW, browserUrl.toUri())
-                        .addCategory(Intent.CATEGORY_BROWSABLE)
-                )
+                launchBrowser(browserUrl)
             } catch (_: Exception) {
                 Toast.makeText(
                     this@WebConsoleActivity,
@@ -223,6 +234,10 @@ class WebConsoleActivity : ComponentActivity() {
                 externalBrowserOpening = false
             }
         }
+    }
+
+    private fun launchBrowser(url: String) {
+        startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE))
     }
 
     private fun requestTunnel(action: String, forceReconnect: Boolean, requestId: String) {
@@ -238,16 +253,16 @@ class WebConsoleActivity : ComponentActivity() {
         )
     }
 
-    private suspend fun awaitCpaTunnel(requestId: String): String = withTimeout(35_000) {
-        val profileId = intent.getStringExtra(EXTRA_CPA_PROFILE_ID) ?: error("CPA 服务器档案缺失。")
+    private suspend fun awaitProfileTunnel(requestId: String, console: ProfileConsole): String = withTimeout(35_000) {
+        val profileId = intent.getStringExtra(EXTRA_CPA_PROFILE_ID) ?: error("服务器档案缺失。")
         val state = TunnelRuntime.state.first {
             it.requestId == requestId && it.cpaProfileId == profileId && !it.connecting &&
-                (it.error != null || it.cpaActive)
+                (it.error != null || it.cpaActive && it.profileConsole == console)
         }
         state.error?.let { error(it) }
-        val port = state.cpaLocalPort ?: error("CPA 通道未就绪。")
-        val host = state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")
-        "http://$host:$port$CPA_MANAGEMENT_PATH"
+        val port = state.cpaLocalPort ?: error("网页通道未就绪。")
+        val host = state.cpaLocalHost ?: error("隔离回环地址缺失。")
+        console.localUrl(host, port)
     }
 
     private suspend fun awaitZakoTunnel(requestId: String) {

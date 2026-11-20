@@ -17,4 +17,13 @@ fun isSameConsoleOrigin(initialUrl: String, destinationUrl: String): Boolean = r
         initial.host.equals(destination.host, ignoreCase = true) && initial.port == destination.port
 }.getOrDefault(false)
 
+internal fun isExternalSearchResultUrl(value: String): Boolean = runCatching {
+    val uri = URI(value)
+    val host = uri.host?.lowercase()?.trimEnd('.') ?: return false
+    val suffix = host.substringAfterLast('.', "")
+    (uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)) &&
+        uri.userInfo == null && host.contains('.') && suffix.firstOrNull()?.isLetter() == true &&
+        suffix !in setOf("localhost", "local", "internal")
+}.getOrDefault(false)
+
 private val CPA_LOOPBACK_HOSTS = (2..17).map { "127.0.0.$it" }.toSet()

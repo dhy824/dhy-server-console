@@ -11,10 +11,10 @@ import androidx.lifecycle.viewModelScope
 import cn.zzmllk.amadeus.data.AppConfig
 import cn.zzmllk.amadeus.data.ActiveServerConnection
 import cn.zzmllk.amadeus.data.ActiveServerStore
-import cn.zzmllk.amadeus.data.CPA_MANAGEMENT_PATH
 import cn.zzmllk.amadeus.data.CpaProfileStore
 import cn.zzmllk.amadeus.data.CpaSecureKeyStore
 import cn.zzmllk.amadeus.data.CpaServerProfile
+import cn.zzmllk.amadeus.data.ProfileConsole
 import cn.zzmllk.amadeus.data.ConfigStore
 import cn.zzmllk.amadeus.data.SecureKeyStore
 import cn.zzmllk.amadeus.data.ServerService
@@ -172,7 +172,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         true
     } catch (error: Exception) {
-        mutableMessage.value = error.message ?: "无法保存 CPA 服务器档案。"
+        mutableMessage.value = error.message ?: "无法保存 服务器档案。"
         false
     }
 
@@ -186,14 +186,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableCpaKeys.value = mutableCpaKeys.value - profileId
             mutableMessage.value = "服务器档案已删除。"
         } catch (error: Exception) {
-            mutableMessage.value = error.message ?: "无法删除 CPA 服务器档案。"
+            mutableMessage.value = error.message ?: "无法删除 服务器档案。"
         }
     }
 
     fun importCpaPrivateKey(uri: Uri, profileId: String) {
         viewModelScope.launch {
-            runBusy("此 CPA 档案的 SSH 私钥已单独加密保存。") {
-                check(cpaProfileStore.find(profileId) != null) { "CPA 服务器档案已删除，请刷新后重试。" }
+            runBusy("此 服务器档案的 SSH 私钥已单独加密保存。") {
+                check(cpaProfileStore.find(profileId) != null) { "服务器档案已删除，请刷新后重试。" }
                 val bytes = withContext(Dispatchers.IO) {
                     getApplication<Application>().contentResolver.openInputStream(uri)?.use(::readLimited)
                         ?: error("无法读取选择的文件。")
@@ -209,7 +209,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearCpaPrivateKey(profileId: String) {
         viewModelScope.launch {
-            runBusy("已移除此 CPA 档案的 SSH 私钥。") {
+            runBusy("已移除此 服务器档案的 SSH 私钥。") {
                 if (activeServerId.value == profileId) stopAllTunnels() else stopCpaTunnel()
                 withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
                 cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
@@ -221,12 +221,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun generateCpaKeyPair(profileId: String, replaceExisting: Boolean = false) {
         viewModelScope.launch {
             runBusy(null) {
-                val checkedProfile = cpaProfileStore.find(profileId) ?: error("CPA 服务器档案已删除，请刷新后重试。")
+                val checkedProfile = cpaProfileStore.find(profileId) ?: error("服务器档案已删除，请刷新后重试。")
                 check(replaceExisting || !cpaKeyStore.hasKey(profileId)) { "此档案已有密钥；请确认后再生成替换密钥。" }
                 val publicKey = runInterruptible(Dispatchers.IO) { cpaKeyStore.generate(profileId) }
                 if (cpaProfileStore.find(profileId) != checkedProfile) {
                     withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
-                    error("CPA 服务器档案在生成密钥期间发生变化，密钥已清除，请重试。")
+                    error("服务器档案在生成密钥期间发生变化，密钥已清除，请重试。")
                 }
                 cpaProfileStore.save(checkedProfile.copy(publicKey = publicKey))
                 mutableCpaKeys.value = mutableCpaKeys.value + profileId
@@ -239,7 +239,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun copyCpaPublicKey(profileId: String) {
         val publicKey = cpaProfileStore.find(profileId)?.publicKey
         if (publicKey.isNullOrBlank()) {
-            mutableMessage.value = "此 CPA 档案没有可复制的手机公钥。"
+            mutableMessage.value = "此 服务器档案没有可复制的手机公钥。"
             return
         }
         val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
@@ -247,7 +247,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             mutableMessage.value = "无法访问剪贴板。"
             return
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("CPA SSH 公钥", publicKey))
+        clipboard.setPrimaryClip(ClipData.newPlainText("服务器 SSH 公钥", publicKey))
         mutableMessage.value = "已复制公钥。私钥仍保留在手机加密存储中。"
     }
 
@@ -303,7 +303,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runBusy(null) {
                 check(activeServerStore.current().profileId == profileId) { "请先在设置中切换到要测试的服务器。" }
-                val checkedProfile = cpaProfileStore.find(profileId) ?: error("CPA 服务器档案已删除，请刷新后重试。")
+                val checkedProfile = cpaProfileStore.find(profileId) ?: error("服务器档案已删除，请刷新后重试。")
                 val selected = activeServerStore.current()
                 check(selected.hasKey) { "请先为当前服务器导入 SSH 私钥。" }
                 val privateKey = activeServerStore.readKey(selected)
@@ -329,7 +329,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val current = cpaProfileStore.find(cpaProfile.id)
             if (current == null || current.host != cpaProfile.host || current.sshPort != cpaProfile.sshPort || current.user != cpaProfile.user) {
                 dismissHostTrust()
-                mutableMessage.value = "CPA 服务器档案已变化，请重新测试。"
+                mutableMessage.value = "服务器档案已变化，请重新测试。"
                 return
             }
             pendingProbe?.let { cpaProfileStore.trustHost(cpaProfile.id, it.keyType, it.encodedKey) }
@@ -358,39 +358,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         mutableFingerprint.value = null
     }
 
-    fun openCpaConsole(profileId: String?) {
+    fun openProfileConsole(profileId: String, console: ProfileConsole) {
         viewModelScope.launch {
             runBusy(null) {
-                check(profileId != null) { "当前选择的是默认服务器；请先在设置中选择需要打开 CPA 控制台的服务器。" }
                 val selected = activeServerStore.current()
                 check(selected.profileId == profileId) { "当前服务器已切换，请重新打开控制台。" }
-                check(selected.supports(ServerService.CPA)) { "当前服务器未配置 CPA 控制台。" }
-                val profile = cpaProfileStore.find(profileId) ?: error("所选 CPA 服务器档案不存在。")
+                check(selected.supports(console.service)) { "当前服务器未配置${console.title}。" }
+                val profile = cpaProfileStore.find(profileId) ?: error("所选服务器档案不存在。")
                 check(selected.hasKey) { "请先为当前服务器配置 SSH 私钥。" }
-                check(profile.hasTrustedHost) { "请先测试此 CPA 档案并核对、确认服务器指纹。" }
+                check(profile.hasTrustedHost) { "请先测试此档案并核对服务器指纹。" }
                 val requestId = UUID.randomUUID().toString()
+                val action = TunnelService.actionForProfileConsole(console)
                 ContextCompat.startForegroundService(
                     getApplication(),
                     Intent(getApplication(), TunnelService::class.java)
-                        .setAction(TunnelService.ACTION_START_CPA)
+                        .setAction(action)
                         .putExtra(TunnelService.EXTRA_REQUEST_ID, requestId)
                         .putExtra(TunnelService.EXTRA_CPA_PROFILE_ID, profile.id)
                         .putExtra(TunnelService.EXTRA_SERVER_PROFILE_SELECTED, true)
                         .putExtra(TunnelService.EXTRA_SERVER_PROFILE_ID, selected.profileId)
                 )
                 val state = withTimeout(35_000) {
-                    TunnelRuntime.state.first { current ->
-                        current.requestId == requestId && current.cpaProfileId == profile.id && !current.connecting &&
-                            (current.error != null || current.cpaActive)
+                    TunnelRuntime.state.first {
+                        it.requestId == requestId && it.cpaProfileId == profile.id && !it.connecting &&
+                            (it.error != null || it.cpaActive && it.profileConsole == console)
                     }
                 }
                 state.error?.let { error(it) }
-                val localPort = state.cpaLocalPort ?: error("CPA 本机回环转发未建立。")
+                check(activeServerStore.current() == selected) { "服务器设置已变化，请重新打开控制台。" }
+                val localPort = state.cpaLocalPort ?: error("本机回环转发未建立。")
+                val localHost = state.cpaLocalHost ?: error("隔离回环地址缺失。")
                 mutableOpenConsole.emit(
                     ConsoleRequest(
-                        "CPA 管理控制台 · ${profile.name}",
-                        "http://${state.cpaLocalHost ?: error("CPA 隔离回环地址缺失。")}:$localPort$CPA_MANAGEMENT_PATH",
-                        TunnelService.ACTION_START_CPA,
+                        "${console.title} · ${profile.name}",
+                        console.localUrl(localHost, localPort),
+                        action,
                         cpaProfileId = profile.id,
                         serverProfileId = selected.profileId
                     )

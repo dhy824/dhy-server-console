@@ -56,7 +56,7 @@ class ActiveServerStore(context: Context) {
     }
 }
 
-internal val aliyunServices = ServerService.entries.toSet() - ServerService.CPA
+internal val aliyunServices = ServerService.entries.toSet() - setOf(ServerService.CPA, ServerService.SEARXNG)
 
 internal fun activeServerKeyRevision(profileId: String?, keyRevision: String): String =
     if (profileId == null) keyRevision else "$profileId:$keyRevision"
