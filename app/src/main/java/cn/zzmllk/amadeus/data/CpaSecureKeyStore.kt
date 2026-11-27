@@ -20,6 +20,21 @@ import javax.crypto.spec.GCMParameterSpec
 class CpaSecureKeyStore(context: Context) {
     private val directory = File(context.applicationContext.filesDir, "cpa_ssh_identities")
 
+    /** One encrypted slot shared by the default server and every server profile. */
+    private val sharedKeyId = SHARED_KEY_ID
+
+    fun generateShared(): String = generate(sharedKeyId)
+
+    fun hasSharedKey(): Boolean = hasKey(sharedKeyId)
+
+    fun sharedRevision(): String = revision(sharedKeyId)
+
+    fun saveShared(privateKey: ByteArray) = save(sharedKeyId, privateKey)
+
+    fun readShared(): ByteArray = read(sharedKeyId)
+
+    fun clearShared() = delete(sharedKeyId)
+
     fun generate(profileId: String): String = synchronized(STORAGE_LOCK) {
         val generated = CpaSshKeyGenerator.generate(profileId)
         try {
@@ -231,6 +246,7 @@ class CpaSecureKeyStore(context: Context) {
 
     private companion object {
         val STORAGE_LOCK = Any()
+        const val SHARED_KEY_ID = "00000000-0000-0000-0000-000000000000"
         val SUPPORTED_PRIVATE_KEY_HEADERS = listOf(
             "-----BEGIN OPENSSH PRIVATE KEY-----",
             "-----BEGIN RSA PRIVATE KEY-----",

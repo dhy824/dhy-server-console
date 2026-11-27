@@ -73,6 +73,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         cpaProfileStore.current().filter { cpaKeyStore.hasKey(it.id) }.map { it.id }.toSet()
     )
     val cpaKeyProfiles: StateFlow<Set<String>> = mutableCpaKeys.asStateFlow()
+    private val mutableSharedCpaKey = MutableStateFlow(cpaKeyStore.hasSharedKey())
+    val sharedCpaKeyImported: StateFlow<Boolean> = mutableSharedCpaKey.asStateFlow()
+    private val mutableSharedCpaPublicKey = MutableStateFlow(cpaProfileStore.currentSharedPublicKey())
+    val sharedCpaPublicKey: StateFlow<String> = mutableSharedCpaPublicKey.asStateFlow()
     val tunnel = TunnelRuntime.state
 
     private val mutableKeyImported = MutableStateFlow(keyStore.hasKey)
@@ -212,13 +216,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                     stopAllTunnels()
-                    cpaProfileStore.importConnection(connection.profile) { id ->
-                        cpaKeyStore.save(id, connection.privateKey)
+                    cpaProfileStore.importConnection(connection.profile) {
+                        cpaKeyStore.saveShared(connection.privateKey)
                     }
                 } finally {
                     connection.privateKey.fill(0)
                 }
                 mutableCpaKeys.value = mutableCpaKeys.value + profile.id
+                cpaProfileStore.clearSharedPublicKey()
+                mutableSharedCpaPublicKey.value = ""
+                mutableSharedCpaKey.value = true
                 mutableSubscriptions.value = ""
                 mutableSubscriptionLink.value = null
                 mutableMessage.value = "已导入 ${profile.name}，可直接连接。"
@@ -244,6 +251,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun importSharedCpaPrivateKey(uri: Uri) {
+        viewModelScope.launch {
+            runBusy("全服务器共用 SSH 私钥已安全导入。阿里云和两台甲骨文都会使用它。") {
+                val bytes = withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openInputStream(uri)?.use(::readLimited)
+                        ?: error("无法读取选择的文件。")
+                }
+                withContext(Dispatchers.IO) { cpaKeyStore.saveShared(bytes) }
+                cpaProfileStore.clearSharedPublicKey()
+                mutableSharedCpaPublicKey.value = ""
+                mutableSharedCpaKey.value = true
+                stopAllTunnels()
+            }
+        }
+    }
+
+    fun promoteDefaultPrivateKeyToShared() {
+        viewModelScope.launch {
+            runBusy("正在把阿里云现有私钥复制为全服务器共用私钥。") {
+                check(keyStore.hasKey) { "阿里云尚未导入 SSH 私钥，请先导入私钥。" }
+                val bytes = withContext(Dispatchers.IO) { keyStore.read() }
+                withContext(Dispatchers.IO) { cpaKeyStore.saveShared(bytes) }
+                cpaProfileStore.clearSharedPublicKey()
+                mutableSharedCpaPublicKey.value = ""
+                mutableSharedCpaKey.value = true
+                stopAllTunnels()
+                mutableMessage.value = "已将阿里云现有私钥复制为全服务器共用私钥。"
+            }
+        }
+    }
+
     fun clearCpaPrivateKey(profileId: String) {
         viewModelScope.launch {
             runBusy("已移除此 服务器档案的 SSH 私钥。") {
@@ -251,6 +289,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { cpaKeyStore.delete(profileId) }
                 cpaProfileStore.find(profileId)?.let { cpaProfileStore.save(it.copy(publicKey = "")) }
                 mutableCpaKeys.value = mutableCpaKeys.value - profileId
+            }
+        }
+    }
+
+    fun clearSharedCpaPrivateKey() {
+        viewModelScope.launch {
+            runBusy("已移除全服务器共用 SSH 私钥。") {
+                stopAllTunnels()
+                withContext(Dispatchers.IO) { cpaKeyStore.clearShared() }
+                cpaProfileStore.clearSharedPublicKey()
+                mutableSharedCpaPublicKey.value = ""
+                mutableSharedCpaKey.value = false
             }
         }
     }
@@ -273,6 +323,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun generateSharedCpaKey(replaceExisting: Boolean = false) {
+        viewModelScope.launch {
+            runBusy(null) {
+                check(replaceExisting || !cpaKeyStore.hasSharedKey()) {
+                    "全服务器已有共用私钥；请确认后再生成替换密钥。"
+                }
+                val publicKey = runInterruptible(Dispatchers.IO) { cpaKeyStore.generateShared() }
+                cpaProfileStore.saveSharedPublicKey(publicKey)
+                mutableSharedCpaPublicKey.value = publicKey
+                mutableSharedCpaKey.value = true
+                stopAllTunnels()
+                mutableMessage.value = "全服务器共用手机密钥已生成。请把公钥登记到阿里云和两台甲骨文后再测试连接。"
+            }
+        }
+    }
+
     fun copyCpaPublicKey(profileId: String) {
         val publicKey = cpaProfileStore.find(profileId)?.publicKey
         if (publicKey.isNullOrBlank()) {
@@ -286,6 +352,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         clipboard.setPrimaryClip(ClipData.newPlainText("服务器 SSH 公钥", publicKey))
         mutableMessage.value = "已复制公钥。私钥仍保留在手机加密存储中。"
+    }
+
+    fun copySharedCpaPublicKey() {
+        if (sharedCpaPublicKey.value.isBlank()) {
+            mutableMessage.value = "共用私钥是外部导入的，应用没有对应公钥文本可复制。"
+            return
+        }
+        val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        if (clipboard == null) {
+            mutableMessage.value = "无法访问剪贴板。"
+            return
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText("全服务器共用 SSH 公钥", sharedCpaPublicKey.value))
+        mutableMessage.value = "已复制全服务器共用公钥。私钥仍保留在手机加密存储中。"
     }
 
     fun importPrivateKey(uri: Uri) {
