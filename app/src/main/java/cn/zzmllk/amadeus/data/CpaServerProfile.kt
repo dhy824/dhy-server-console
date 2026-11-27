@@ -241,6 +241,9 @@ class CpaProfileStore(context: Context) {
 
     fun current(): List<CpaServerProfile> = readProfiles()
 
+    fun currentSharedPublicKey(): String =
+        preferences.getString(KEY_SHARED_PUBLIC_KEY, "").orEmpty()
+
     fun find(id: String): CpaServerProfile? = current().firstOrNull { it.id == id }
 
     fun currentActiveServerId(): String? = readActiveServerId(current())
@@ -309,6 +312,17 @@ class CpaProfileStore(context: Context) {
         save(profile.copy(trustedHostKeyType = keyType, trustedHostKey = encodedKey))
     }
 
+    fun saveSharedPublicKey(publicKey: String) {
+        require(publicKey.length <= 8192 && publicKey.none(Char::isISOControl)) {
+            "SSH 公钥文本无效。"
+        }
+        preferences.edit { putString(KEY_SHARED_PUBLIC_KEY, publicKey) }
+    }
+
+    fun clearSharedPublicKey() {
+        preferences.edit { remove(KEY_SHARED_PUBLIC_KEY) }
+    }
+
     fun delete(id: String) {
         val removed = mutableProfiles.value.firstOrNull { it.id == id } ?: return
         val next = mutableProfiles.value.filterNot { it.id == id }
@@ -358,5 +372,6 @@ class CpaProfileStore(context: Context) {
         const val KEY_SELECTED = "selected_id"
         const val KEY_ACTIVE_SERVER = "active_server_id"
         const val KEY_RETIRED_HOSTS = "retired_loopback_addresses"
+        const val KEY_SHARED_PUBLIC_KEY = "shared_public_key"
     }
 }

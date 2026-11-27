@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -156,8 +157,11 @@ fun AmadeusApp(
         }
     }
     val cpaKeyProfiles by viewModel.cpaKeyProfiles.collectAsState()
+    val sharedCpaKeyImported by viewModel.sharedCpaKeyImported.collectAsState()
+    val sharedCpaPublicKey by viewModel.sharedCpaPublicKey.collectAsState()
     val tunnel by viewModel.tunnel.collectAsState()
     val keyImported by viewModel.keyImported.collectAsState()
+    val serverKeyImported = sharedCpaKeyImported || keyImported
     val busy by viewModel.busy.collectAsState()
     val message by viewModel.message.collectAsState()
     val output by viewModel.terminalOutput.collectAsState()
@@ -170,8 +174,8 @@ fun AmadeusApp(
         if (visibleTabs.none { it.ordinal == selected }) selected = AppTab.HOME.ordinal
     }
     var confirmSpeed by remember { mutableStateOf(false) }
-    val importKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.importPrivateKey(uri)
+    val importSharedKey = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importSharedCpaPrivateKey(uri)
     }
     val importConnection = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.importServerConnection(uri) { selected = AppTab.HOME.ordinal }
@@ -300,17 +304,15 @@ fun AmadeusApp(
                                     bottomInset = padding.calculateBottomPadding(),
                                     config = config,
                                     showDefaultConnection = activeServerId == null,
-                                    keyImported = keyImported,
+                                    keyImported = serverKeyImported,
                                     busy = busy,
                                     onUpdate = viewModel::updateConfig,
-                                    // A single wildcard MIME type matters here: some Android document
-                                    // providers hide extensionless files when EXTRA_MIME_TYPES is used.
-                                    onImportKey = { importKey.launch(arrayOf("*/*")) },
-                                    onClearKey = viewModel::clearPrivateKey,
                                     onTest = viewModel::testConnection,
                                     onClearTrust = { viewModel.updateConfig { it.copy(trustedHostKey = "", trustedHostKeyType = "") } },
                                     cpaProfiles = cpaProfiles,
                                     cpaKeyProfiles = cpaKeyProfiles,
+                                    sharedCpaKeyImported = sharedCpaKeyImported,
+                                    sharedCpaPublicKey = sharedCpaPublicKey,
                                     activeServerId = activeServerId,
                                     onSelectActiveServer = viewModel::selectActiveServer,
                                     onImportConnection = { importConnection.launch(arrayOf("*/*")) },
@@ -323,7 +325,12 @@ fun AmadeusApp(
                                         cpaKeyImportTarget = profileId
                                         importCpaKey.launch(arrayOf("*/*"))
                                     },
-                                    onClearCpaKey = viewModel::clearCpaPrivateKey
+                                    onClearCpaKey = viewModel::clearCpaPrivateKey,
+                                    onGenerateSharedCpaKey = viewModel::generateSharedCpaKey,
+                                    onCopySharedCpaPublicKey = viewModel::copySharedCpaPublicKey,
+                                    onImportSharedCpaKey = { importSharedKey.launch(arrayOf("*/*")) },
+                                    onPromoteDefaultKey = viewModel::promoteDefaultPrivateKeyToShared,
+                                    onClearSharedCpaKey = viewModel::clearSharedCpaPrivateKey
                                 )
                             }
                         }
@@ -844,12 +851,12 @@ internal fun SettingsScreen(
     keyImported: Boolean,
     busy: Boolean,
     onUpdate: ((AppConfig) -> AppConfig) -> Unit,
-    onImportKey: () -> Unit,
-    onClearKey: () -> Unit,
     onTest: () -> Unit,
     onClearTrust: () -> Unit,
     cpaProfiles: List<CpaServerProfile>,
     cpaKeyProfiles: Set<String>,
+    sharedCpaKeyImported: Boolean,
+    sharedCpaPublicKey: String,
     activeServerId: String?,
     onSelectActiveServer: (String?) -> Unit,
     onImportConnection: () -> Unit,
@@ -859,11 +866,17 @@ internal fun SettingsScreen(
     onGenerateCpaKey: (String, Boolean) -> Unit,
     onCopyCpaPublicKey: (String) -> Unit,
     onImportCpaKey: (String) -> Unit,
-    onClearCpaKey: (String) -> Unit
+    onClearCpaKey: (String) -> Unit,
+    onGenerateSharedCpaKey: (Boolean) -> Unit,
+    onCopySharedCpaPublicKey: () -> Unit,
+    onImportSharedCpaKey: () -> Unit,
+    onPromoteDefaultKey: () -> Unit,
+    onClearSharedCpaKey: () -> Unit
 ) {
     var editingCpaProfile by remember { mutableStateOf<CpaServerProfile?>(null) }
     var confirmingDelete by remember { mutableStateOf<CpaServerProfile?>(null) }
     var confirmingKeyReplacement by remember { mutableStateOf<CpaServerProfile?>(null) }
+    var confirmingSharedKeyReplacement by remember { mutableStateOf(false) }
     var addCpaProfile by remember { mutableStateOf(false) }
     var serverPickerExpanded by remember { mutableStateOf(false) }
     if (addCpaProfile || editingCpaProfile != null) {
@@ -903,6 +916,22 @@ internal fun SettingsScreen(
                 }) { Text("生成并替换") }
             },
             dismissButton = { OutlinedButton(onClick = { confirmingKeyReplacement = null }) { Text("取消") } }
+        )
+    }
+    if (confirmingSharedKeyReplacement) {
+        AlertDialog(
+            onDismissRequest = { confirmingSharedKeyReplacement = false },
+            title = { Text("替换全服务器共用 SSH 密钥？") },
+            text = {
+                Text("手机会生成一份新的私钥并加密保存。新公钥需要登记到阿里云和两台甲骨文；登记完成前，三台服务器都不能使用新密钥登录。")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    onGenerateSharedCpaKey(true)
+                    confirmingSharedKeyReplacement = false
+                }) { Text("生成并替换") }
+            },
+            dismissButton = { OutlinedButton(onClick = { confirmingSharedKeyReplacement = false }) { Text("取消") } }
         )
     }
     ConsoleScrollColumn(bottomInset) {
@@ -950,6 +979,61 @@ internal fun SettingsScreen(
                 }
             }
         )
+        GlassCard {
+            ConsoleCardHeading(Icons.Rounded.Key, "全服务器共用 SSH 私钥", if (sharedCpaKeyImported) "三台服务器都会使用" else "导入一次即可用于阿里云和两台甲骨文")
+            Spacer(Modifier.height(10.dp))
+            Text(if (sharedCpaKeyImported) "已加密保存在本机" else "尚未导入共用私钥", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onImportSharedCpaKey, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    Text(if (sharedCpaKeyImported) "更换共用私钥" else "导入共用私钥")
+                }
+                if (sharedCpaKeyImported) {
+                    OutlinedButton(onClick = onClearSharedCpaKey, enabled = !busy) {
+                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null)
+                        Spacer(Modifier.width(5.dp))
+                        Text("移除")
+                    }
+                }
+            }
+            FilledTonalButton(
+                onClick = {
+                    if (sharedCpaKeyImported) confirmingSharedKeyReplacement = true
+                    else onGenerateSharedCpaKey(false)
+                },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Text(if (sharedCpaKeyImported) "生成并替换共用密钥" else "在手机生成共用密钥")
+            }
+            if (!sharedCpaKeyImported && keyImported) {
+                OutlinedButton(onClick = onPromoteDefaultKey, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("沿用阿里云当前私钥作为共用私钥")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("选择没有 .pub 后缀的私钥文件。导入或生成后，服务器端仍需把同一公钥分别登记到三台服务器。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+            if (sharedCpaPublicKey.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text("共用公钥 · 需登记到三台服务器", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                Text(CpaSshKeyGenerator.fingerprint(sharedCpaPublicKey), color = MutedInk, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(Color(0xFFF5F8FC), RoundedCornerShape(6.dp))
+                        .border(1.dp, Hairline, RoundedCornerShape(6.dp))
+                        .padding(10.dp)
+                ) {
+                    SelectionContainer {
+                        Text(sharedCpaPublicKey, modifier = Modifier.fillMaxWidth(), fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, color = Ink)
+                    }
+                }
+                OutlinedButton(onClick = onCopySharedCpaPublicKey, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("复制共用公钥")
+                }
+            }
+        }
         if (showDefaultConnection) GlassCard {
             Text("阿里云连接设置", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
@@ -1010,7 +1094,8 @@ internal fun SettingsScreen(
                 ServerProfileCard(
                     profile = profile,
                     current = profile.id == activeServerId,
-                    hasKey = profile.id in cpaKeyProfiles,
+                    hasKey = sharedCpaKeyImported || profile.id in cpaKeyProfiles,
+                    sharedKey = sharedCpaKeyImported,
                     busy = busy,
                     modifier = modifier,
                     onSelect = { onSelectActiveServer(profile.id) },
@@ -1042,34 +1127,6 @@ internal fun SettingsScreen(
         if (showDefaultConnection) {
         GlassCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Key, contentDescription = null, tint = GoogleBlue, modifier = Modifier.size(27.dp))
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("SSH 私钥", style = MaterialTheme.typography.titleMedium)
-                    Text(if (keyImported) "已加密保存在本机" else "尚未导入", color = MutedInk)
-                }
-                if (keyImported) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF188038))
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onImportKey, modifier = Modifier.weight(1f)) { Text(if (keyImported) "更换私钥" else "导入私钥") }
-                if (keyImported) {
-                    OutlinedButton(onClick = onClearKey) {
-                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null)
-                        Spacer(Modifier.width(5.dp))
-                        Text("移除")
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "请选择没有 .pub 后缀的私钥文件。系统环境变化导致无法解密时，点“更换私钥”重新导入原文件，无需清除应用数据。",
-                color = MutedInk,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-        GlassCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Security, contentDescription = null, tint = GoogleBlue)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -1096,6 +1153,7 @@ private fun ServerProfileCard(
     profile: CpaServerProfile,
     current: Boolean,
     hasKey: Boolean,
+    sharedKey: Boolean,
     busy: Boolean,
     modifier: Modifier,
     onSelect: () -> Unit,
@@ -1110,6 +1168,8 @@ private fun ServerProfileCard(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val services = profile.configuredServices.joinToString("、") { it.displayName }
     val keyStatus = when {
+        sharedKey && !profile.hasTrustedHost -> "使用全服务器共用私钥 · 需核对主机指纹"
+        sharedKey -> "使用全服务器共用私钥"
         profile.publicKey.isNotBlank() -> "公钥待登记"
         !hasKey -> "需导入私钥"
         !profile.hasTrustedHost -> "需核对主机指纹"
@@ -1135,24 +1195,28 @@ private fun ServerProfileCard(
             }
             if (expanded) {
                 HorizontalDivider(color = Hairline)
-                OutlinedButton(onClick = onImport, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text(if (hasKey) "导入其他私钥" else "导入已有私钥")
-                }
-                OutlinedButton(onClick = onGenerate, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text(if (hasKey) "生成并替换手机密钥" else "在手机生成 SSH 密钥", textAlign = TextAlign.Center)
-                }
-                if (profile.publicKey.isNotBlank()) {
-                    Text(
-                        CpaSshKeyGenerator.fingerprint(profile.publicKey),
-                        color = MutedInk,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp
-                    )
-                    SelectionContainer {
-                        Text(profile.publicKey, color = Ink, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                if (sharedKey) {
+                    Text("此档案已统一使用上方的全服务器共用私钥。", color = MutedInk, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    OutlinedButton(onClick = onImport, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(if (hasKey) "导入其他私钥" else "导入已有私钥")
                     }
-                    OutlinedButton(onClick = onCopy, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text("复制公钥")
+                    OutlinedButton(onClick = onGenerate, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(if (hasKey) "生成并替换手机密钥" else "在手机生成 SSH 密钥", textAlign = TextAlign.Center)
+                    }
+                    if (profile.publicKey.isNotBlank()) {
+                        Text(
+                            CpaSshKeyGenerator.fingerprint(profile.publicKey),
+                            color = MutedInk,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
+                        SelectionContainer {
+                            Text(profile.publicKey, color = Ink, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
+                        OutlinedButton(onClick = onCopy, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            Text("复制公钥")
+                        }
                     }
                 }
                 OutlinedButton(
@@ -1162,7 +1226,7 @@ private fun ServerProfileCard(
                 ) {
                     Text(if (profile.hasTrustedHost) "重新测试主机指纹" else "测试并确认主机指纹", textAlign = TextAlign.Center)
                 }
-                if (hasKey) {
+                if (hasKey && !sharedKey) {
                     OutlinedButton(onClick = onClear, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Text("移除此档案私钥")
                     }

@@ -28,23 +28,27 @@ class ActiveServerStore(context: Context) {
         if (profileId != null && profile == null) error("所选服务器档案不存在，请重新选择。")
         return if (profile == null) {
             val config = defaults.current()
+            val sharedKey = profileKeys.hasSharedKey()
+            val keyRevision = if (sharedKey) "shared:${profileKeys.sharedRevision()}" else defaultKey.revision
             ActiveServerConnection(
                 profileId = null,
                 name = "阿里云",
                 config = config,
                 localHost = "127.0.0.1",
-                keyRevision = activeServerKeyRevision(null, defaultKey.revision),
-                hasKey = defaultKey.hasKey,
+                keyRevision = activeServerKeyRevision(null, keyRevision),
+                hasKey = sharedKey || defaultKey.hasKey,
                 configuredServices = aliyunServices
             )
         } else {
+            val sharedKey = profileKeys.hasSharedKey()
+            val keyRevision = if (sharedKey) profileKeys.sharedRevision() else profileKeys.revision(profile.id)
             ActiveServerConnection(
                 profileId = profile.id,
                 name = profile.name,
                 config = profile.toAppConfig(),
                 localHost = profile.localHost,
-                keyRevision = activeServerKeyRevision(profile.id, profileKeys.revision(profile.id)),
-                hasKey = profileKeys.hasKey(profile.id),
+                keyRevision = activeServerKeyRevision(profile.id, keyRevision),
+                hasKey = sharedKey || profileKeys.hasKey(profile.id),
                 configuredServices = profile.configuredServices
             )
         }
@@ -52,7 +56,11 @@ class ActiveServerStore(context: Context) {
 
     fun readKey(connection: ActiveServerConnection): ByteArray {
         check(current() == connection) { "当前服务器或私钥已变化，请重新选择后重试。" }
-        return connection.profileId?.let(profileKeys::read) ?: defaultKey.read()
+        return if (profileKeys.hasSharedKey()) {
+            profileKeys.readShared()
+        } else {
+            connection.profileId?.let(profileKeys::read) ?: defaultKey.read()
+        }
     }
 }
 
